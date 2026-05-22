@@ -1,6 +1,6 @@
 # 执行日志：gpt_image_playground 前后端分离改造 v0.0.1
 
-> 最后更新：2026-05-22 20:29:14
+> 最后更新：2026-05-22 20:38:16
 > 时间格式：yyyy-MM-dd HH:mm:ss
 
 ## 阶段记录
@@ -44,3 +44,4 @@
 | 2026-05-22 20:07:06 | Task 8：移除旧 /api-proxy/ 开发代理 | 通过 | RED：旧代理扫描命中 vite.config.ts、src/vite-env.d.ts、devProxy 文件和兼容字段；GREEN：npm run test 17 个测试文件、160 个测试通过，npx tsc -b --pretty false 通过，源码级旧代理扫描无匹配；规格审查 APPROVED，质量审查补充旧字段迁移后复审通过；提交 b9e2873、bc2e27c |
 | 2026-05-22 20:25:40 | Task 9：Docker 与生产 Node 服务 | 通过 | RED：server/http.test.ts 复现 JS 占位符未替换，质量审查补充 Docker ESM 元数据测试失败；GREEN：npx vitest run deploy/Dockerfile.test.ts server/http.test.ts 19 个测试通过，npm run build 通过（仅 Vite chunk size warning）；规格审查 APPROVED，质量审查问题已修复并复审通过；提交 48916d8、3d0e336 |
 | 2026-05-22 20:29:14 | Task 10：文档与最终验证 | 通过 | 旧代理扫描无匹配；npm run test 通过；npm run build 通过 |
+| 2026-05-22 20:38:16 | Task 10：README 静态部署限制补充 | 通过 | 已澄清 Cloudflare/纯静态部署不包含 /api/openai-compatible/* 后端；旧代理扫描无匹配；npm run test 通过；npm run build 通过 |

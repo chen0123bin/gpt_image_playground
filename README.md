@@ -128,6 +128,8 @@
 
 项目已内置 Wrangler 配置，可将 Vite 构建产物作为 Cloudflare Workers 静态资源部署。
 
+当前 Wrangler 静态资源部署不包含 Node 服务端 API 路由。默认 OpenAI 兼容配置启用 **服务端 API 模式** 时，浏览器会请求同源 `/api/openai-compatible/*`，因此需要改用 Docker/Node 后端，或自行补充等价的 Worker API 路由。若只部署静态资源，请关闭 **服务端 API 模式**，或使用可由浏览器直接请求的服务商。
+
 **1. 登录 Cloudflare**
 
 ```bash
@@ -219,13 +221,13 @@ npm run mock:api
 
 使用方式见 [本地故障模拟 API](docs/mock-image-api.md)。
 
-**4. 构建静态产物**
+**3. 构建静态产物**
 
 ```bash
 npm run build
 ```
 
-构建输出的文件位于 `dist/` 目录下，可将其部署至任何静态文件服务器（如普通 Nginx、GitHub Pages、Netlify 等）。
+构建输出的文件位于 `dist/` 目录下。纯静态托管（如普通 Nginx、GitHub Pages、Netlify 等）不包含 `/api/openai-compatible/*` 后端，只适合关闭 **服务端 API 模式**、使用可由浏览器直接请求的服务商，或额外提供等价后端/API 路由的部署方式。
 
 </details>
 
