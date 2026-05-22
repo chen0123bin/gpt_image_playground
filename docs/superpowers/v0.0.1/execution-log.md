@@ -1,6 +1,6 @@
 # 执行日志：gpt_image_playground 前后端分离改造 v0.0.1
 
-> 最后更新：2026-05-22 20:47:00
+> 最后更新：2026-05-22 21:33:39
 > 时间格式：yyyy-MM-dd HH:mm:ss
 
 ## 阶段记录
@@ -12,6 +12,7 @@
 | 2026-05-22 13:52:54 | spec | 根据用户反馈回退任务化方案，只保留服务端 API 模式和 OpenAI 兼容接口 | 已将主 API 边界改回 /api/openai-compatible/*，并排除 fal.ai 与自定义服务商 |
 | 2026-05-22 13:58:33 | plan | 写入前后端分离实现计划，阶段从 spec 进入 plan | 已生成 docs/superpowers/v0.0.1/frontend-backend-separation-plan.md，并更新 manifest |
 | 2026-05-22 15:15:15 | execute | 用户指定使用 Subagent-Driven 执行计划，并要求中间测试使用内部浏览器 | 阶段从 plan 进入 execute |
+| 2026-05-22 21:33:39 | delivery | 按 finishing 流程收拢版本，关闭本地 5173/8788 服务并执行交付验证 | 阶段从 execute 进入 delivery；manifest 标记 v0.0.1 为 delivered |
 
 ## Worktree 记录
 
@@ -46,3 +47,6 @@
 | 2026-05-22 20:29:14 | Task 10：文档与最终验证 | 通过 | 旧代理扫描无匹配；npm run test 通过；npm run build 通过 |
 | 2026-05-22 20:38:16 | Task 10：README 静态部署限制补充 | 通过 | 已澄清 Cloudflare/纯静态部署不包含 /api/openai-compatible/* 后端；旧代理扫描无匹配；npm run test 通过；npm run build 通过 |
 | 2026-05-22 20:47:00 | 最终内部浏览器验证 | 通过 | 本地 Vite 5173 + Node 后端 8788；使用 https://image.easytokens.org/ 与用户提供 key，服务端 API 模式生成任务成功，页面显示 1:1、1254×1254 且“编辑输出”可用 |
+| 2026-05-22 21:33:39 | finishing 收拢验证：npm run test | 通过 | 18 个测试文件、163 个测试通过 |
+| 2026-05-22 21:33:39 | finishing 收拢验证：npm run build | 通过 | 生成 dist 与 dist-server；仅保留 Vite chunk size warning |
+| 2026-05-22 21:33:39 | finishing 收拢验证：旧代理扫描 | 通过 | `rg -n "/api-proxy|API_PROXY|ENABLE_API_PROXY|LOCK_API_PROXY|dev-proxy|API 代理|apiProxy|VITE_API_PROXY" . --glob "!node_modules/**" --glob "!docs/superpowers/**"` 无匹配 |
