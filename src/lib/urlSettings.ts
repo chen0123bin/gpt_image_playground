@@ -1,5 +1,5 @@
 import type { ApiMode, AppSettings } from '../types'
-import { normalizeBaseUrl } from './devProxy'
+import { normalizeBaseUrl } from './apiUrl'
 import {
   createDefaultOpenAIProfile,
   DEFAULT_IMAGES_MODEL,

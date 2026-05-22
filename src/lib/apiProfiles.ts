@@ -15,7 +15,7 @@ import type {
 import { readRuntimeEnv } from './runtimeEnv'
 
 const DEFAULT_BASE_URL = readRuntimeEnv(import.meta.env.VITE_DEFAULT_API_URL) || 'https://api.openai.com/v1'
-const DEFAULT_OPENAI_API_PROXY = readRuntimeEnv(import.meta.env.VITE_API_PROXY_AVAILABLE) === 'true'
+const DEFAULT_OPENAI_SERVER_API = true
 export const DEFAULT_IMAGES_MODEL = 'gpt-image-2'
 export const DEFAULT_RESPONSES_MODEL = 'gpt-5.5'
 export const DEFAULT_FAL_BASE_URL = 'https://fal.run'
@@ -266,7 +266,7 @@ export function createDefaultOpenAIProfile(overrides: Partial<ApiProfile> = {}):
     timeout: DEFAULT_API_TIMEOUT,
     apiMode: 'images',
     codexCli: false,
-    apiProxy: DEFAULT_OPENAI_API_PROXY,
+    serverApi: DEFAULT_OPENAI_SERVER_API,
     ...overrides,
   }
 }
@@ -282,7 +282,7 @@ export function createDefaultFalProfile(overrides: Partial<ApiProfile> = {}): Ap
     timeout: DEFAULT_API_TIMEOUT,
     apiMode: 'images',
     codexCli: false,
-    apiProxy: false,
+    serverApi: false,
     ...overrides,
   }
 }
@@ -295,7 +295,7 @@ export function switchApiProfileProvider(profile: ApiProfile, provider: ApiProvi
       model: profile.model,
       apiMode: profile.apiMode,
       codexCli: profile.codexCli,
-      apiProxy: profile.apiProxy,
+      serverApi: profile.serverApi,
       responseFormatB64Json: profile.responseFormatB64Json,
     },
   }
@@ -309,7 +309,7 @@ export function switchApiProfileProvider(profile: ApiProfile, provider: ApiProvi
       model: savedDraft?.model ?? DEFAULT_FAL_MODEL,
       apiMode: savedDraft?.apiMode ?? 'images',
       codexCli: false,
-      apiProxy: false,
+      serverApi: false,
       responseFormatB64Json: savedDraft?.responseFormatB64Json,
       providerDrafts,
     }
@@ -324,7 +324,7 @@ export function switchApiProfileProvider(profile: ApiProfile, provider: ApiProvi
       model: savedDraft?.model ?? (shouldUseOpenAIDefaults ? DEFAULT_IMAGES_MODEL : profile.model || DEFAULT_IMAGES_MODEL),
       apiMode: savedDraft?.apiMode ?? 'images',
       codexCli: false,
-      apiProxy: false,
+      serverApi: false,
       responseFormatB64Json: savedDraft?.responseFormatB64Json,
       providerDrafts,
     }
@@ -337,7 +337,7 @@ export function switchApiProfileProvider(profile: ApiProfile, provider: ApiProvi
     model: savedDraft?.model ?? DEFAULT_IMAGES_MODEL,
     apiMode: savedDraft?.apiMode ?? profile.apiMode,
     codexCli: savedDraft?.codexCli ?? profile.codexCli,
-    apiProxy: savedDraft?.apiProxy ?? DEFAULT_OPENAI_API_PROXY,
+    serverApi: savedDraft?.serverApi ?? DEFAULT_OPENAI_SERVER_API,
     responseFormatB64Json: savedDraft?.responseFormatB64Json,
     providerDrafts,
   }
@@ -345,7 +345,9 @@ export function switchApiProfileProvider(profile: ApiProfile, provider: ApiProvi
 
 function normalizeProviderDraft(input: unknown, provider: ApiProvider, customProviderIds: Set<string>): ApiProfileProviderDraft {
   if (!isRecord(input)) return undefined
-  const fallback = provider === 'fal' ? createDefaultFalProfile() : createDefaultOpenAIProfile()
+  const fallback = provider === 'fal' ? createDefaultFalProfile() : createDefaultOpenAIProfile({
+    serverApi: provider === 'openai' ? DEFAULT_OPENAI_SERVER_API : false,
+  })
   const baseUrl = typeof input.baseUrl === 'string' ? input.baseUrl : undefined
   const model = typeof input.model === 'string' && input.model.trim() ? input.model : undefined
   const apiMode = input.apiMode === 'responses' ? 'responses' : input.apiMode === 'images' ? 'images' : undefined
@@ -359,7 +361,7 @@ function normalizeProviderDraft(input: unknown, provider: ApiProvider, customPro
     model,
     apiMode,
     codexCli: typeof input.codexCli === 'boolean' ? input.codexCli : fallback.codexCli,
-    apiProxy: typeof input.apiProxy === 'boolean' ? input.apiProxy : fallback.apiProxy,
+    serverApi: readServerApiFlag(input, fallback),
     responseFormatB64Json: input.responseFormatB64Json === true ? true : undefined,
   }
 }
@@ -373,11 +375,21 @@ function normalizeProviderDrafts(input: unknown, customProviderIds: Set<string>)
   return entries.length ? Object.fromEntries(entries) : undefined
 }
 
+/** 读取服务端 API 开关，并兼容旧版 apiProxy 字段。 */
+function readServerApiFlag(record: Record<string, unknown>, defaults: Pick<ApiProfile, 'serverApi'>): boolean {
+  if (typeof record.serverApi === 'boolean') return record.serverApi
+  if (typeof record.apiProxy === 'boolean') return record.apiProxy
+  return defaults.serverApi
+}
+
 export function normalizeApiProfile(input: unknown, fallback?: Partial<ApiProfile>, customProviderIds = new Set<string>()): ApiProfile {
   const record = input && typeof input === 'object' ? input as Record<string, unknown> : {}
   const rawProvider = typeof record.provider === 'string' ? record.provider : ''
   const provider: ApiProvider = rawProvider === 'fal' || customProviderIds.has(rawProvider) ? rawProvider : 'openai'
-  const defaults = provider === 'fal' ? createDefaultFalProfile(fallback) : createDefaultOpenAIProfile(fallback)
+  const defaults = provider === 'fal' ? createDefaultFalProfile(fallback) : createDefaultOpenAIProfile({
+    ...fallback,
+    serverApi: provider === 'openai' ? fallback?.serverApi ?? DEFAULT_OPENAI_SERVER_API : false,
+  })
   const apiMode: ApiMode = record.apiMode === 'responses' ? 'responses' : 'images'
   const rawBaseUrl = typeof record.baseUrl === 'string' ? record.baseUrl : defaults.baseUrl
 
@@ -392,7 +404,7 @@ export function normalizeApiProfile(input: unknown, fallback?: Partial<ApiProfil
     timeout: typeof record.timeout === 'number' && Number.isFinite(record.timeout) ? record.timeout : defaults.timeout,
     apiMode,
     codexCli: Boolean(record.codexCli),
-    apiProxy: typeof record.apiProxy === 'boolean' ? record.apiProxy : defaults.apiProxy,
+    serverApi: readServerApiFlag(record, defaults),
     responseFormatB64Json: record.responseFormatB64Json === true ? true : undefined,
     providerDrafts: normalizeProviderDrafts(record.providerDrafts, customProviderIds),
   }
@@ -422,7 +434,7 @@ export function normalizeSettings(input: Partial<AppSettings> | unknown): AppSet
     timeout: typeof record.timeout === 'number' && Number.isFinite(record.timeout) ? record.timeout : DEFAULT_API_TIMEOUT,
     apiMode: record.apiMode === 'responses' ? 'responses' : 'images',
     codexCli: Boolean(record.codexCli),
-    apiProxy: typeof record.apiProxy === 'boolean' ? record.apiProxy : DEFAULT_OPENAI_API_PROXY,
+    serverApi: readServerApiFlag(record, { serverApi: DEFAULT_OPENAI_SERVER_API }),
     responseFormatB64Json: record.responseFormatB64Json === true ? true : undefined,
   })
   const profiles = Array.isArray(record.profiles) && record.profiles.length
@@ -440,7 +452,7 @@ export function normalizeSettings(input: Partial<AppSettings> | unknown): AppSet
     timeout: active.timeout,
     apiMode: active.apiMode,
     codexCli: active.codexCli,
-    apiProxy: active.apiProxy,
+    serverApi: active.serverApi,
     customProviders,
     providerOrder: Array.isArray(record.providerOrder) ? record.providerOrder.map(String) : undefined,
     clearInputAfterSubmit: typeof record.clearInputAfterSubmit === 'boolean' ? record.clearInputAfterSubmit : false,
@@ -541,7 +553,7 @@ export function getActiveApiProfile(settings: Partial<AppSettings> | unknown): A
     timeout: typeof record.timeout === 'number' && Number.isFinite(record.timeout) ? record.timeout : profile.timeout,
     apiMode: record.apiMode === 'images' || record.apiMode === 'responses' ? record.apiMode : profile.apiMode,
     codexCli: typeof record.codexCli === 'boolean' ? record.codexCli : profile.codexCli,
-    apiProxy: typeof record.apiProxy === 'boolean' ? record.apiProxy : profile.apiProxy,
+    serverApi: readServerApiFlag(record, profile),
   }
 }
 
@@ -563,7 +575,7 @@ function isDefaultOpenAIProfile(profile: ApiProfile): boolean {
     profile.timeout === DEFAULT_API_TIMEOUT &&
     profile.apiMode === 'images' &&
     profile.codexCli === false &&
-    profile.apiProxy === DEFAULT_OPENAI_API_PROXY
+    profile.serverApi === DEFAULT_OPENAI_SERVER_API
 }
 
 function hasOnlyDefaultProfiles(settings: AppSettings): boolean {
@@ -717,7 +729,7 @@ export const DEFAULT_SETTINGS: AppSettings = normalizeSettings({
   timeout: DEFAULT_API_TIMEOUT,
   apiMode: 'images',
   codexCli: false,
-  apiProxy: DEFAULT_OPENAI_API_PROXY,
+  serverApi: DEFAULT_OPENAI_SERVER_API,
   customProviders: [],
   clearInputAfterSubmit: false,
   persistInputOnRestart: true,

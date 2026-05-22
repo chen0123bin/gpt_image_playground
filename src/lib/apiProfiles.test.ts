@@ -24,7 +24,7 @@ describe('mergeImportedSettings', () => {
       timeout: 120,
       apiMode: 'responses',
       codexCli: true,
-      apiProxy: true,
+      serverApi: true,
     })
 
     expect(merged.profiles).toHaveLength(1)
@@ -38,7 +38,7 @@ describe('mergeImportedSettings', () => {
       timeout: 120,
       apiMode: 'responses',
       codexCli: true,
-      apiProxy: true,
+      serverApi: true,
     })
   })
 
@@ -55,7 +55,7 @@ describe('mergeImportedSettings', () => {
           timeout: 300,
           apiMode: 'images',
           codexCli: false,
-          apiProxy: false,
+          serverApi: false,
         },
         {
           id: 'imported-fal',
@@ -67,7 +67,7 @@ describe('mergeImportedSettings', () => {
           timeout: 300,
           apiMode: 'images',
           codexCli: false,
-          apiProxy: false,
+          serverApi: false,
         },
       ],
       activeProfileId: 'imported-fal',
@@ -90,7 +90,7 @@ describe('mergeImportedSettings', () => {
           timeout: 300,
           apiMode: 'images',
           codexCli: false,
-          apiProxy: false,
+          serverApi: false,
         },
         {
           id: 'imported-openai-b',
@@ -102,7 +102,7 @@ describe('mergeImportedSettings', () => {
           timeout: 600,
           apiMode: 'images',
           codexCli: true,
-          apiProxy: true,
+          serverApi: true,
         },
       ],
       activeProfileId: 'imported-openai-b',
@@ -155,7 +155,7 @@ describe('mergeImportedSettings', () => {
           timeout: 300,
           apiMode: 'images',
           codexCli: false,
-          apiProxy: false,
+          serverApi: false,
         },
         {
           id: 'imported-fal',
@@ -167,7 +167,7 @@ describe('mergeImportedSettings', () => {
           timeout: 300,
           apiMode: 'images',
           codexCli: false,
-          apiProxy: false,
+          serverApi: false,
         },
       ],
       activeProfileId: 'imported-fal',
@@ -199,7 +199,7 @@ describe('mergeImportedSettings', () => {
           timeout: 600,
           apiMode: 'images',
           codexCli: true,
-          apiProxy: true,
+          serverApi: true,
         },
         {
           id: 'new-fal',
@@ -211,7 +211,7 @@ describe('mergeImportedSettings', () => {
           timeout: 300,
           apiMode: 'images',
           codexCli: false,
-          apiProxy: false,
+          serverApi: false,
         },
       ],
     })
@@ -244,7 +244,7 @@ describe('mergeImportedSettings', () => {
         timeout: 300,
         apiMode: 'images',
         codexCli: false,
-        apiProxy: false,
+        serverApi: false,
       }],
       activeProfileId: 'existing-custom',
     })
@@ -270,7 +270,7 @@ describe('mergeImportedSettings', () => {
         timeout: 300,
         apiMode: 'images',
         codexCli: false,
-        apiProxy: false,
+        serverApi: false,
       }],
     })
     const merged = mergeImportedSettings(current, imported)
@@ -305,7 +305,7 @@ describe('mergeImportedSettings', () => {
         timeout: 300,
         apiMode: 'images',
         codexCli: false,
-        apiProxy: false,
+        serverApi: false,
       }],
     })
 
@@ -341,7 +341,7 @@ describe('mergeImportedSettings', () => {
         timeout: 300,
         apiMode: 'images',
         codexCli: false,
-        apiProxy: false,
+        serverApi: false,
       }],
     })
 
@@ -358,6 +358,26 @@ describe('mergeImportedSettings', () => {
 })
 
 describe('custom providers', () => {
+  it('migrates legacy apiProxy to serverApi', () => {
+    const settings = normalizeSettings({
+      profiles: [{
+        id: 'legacy',
+        name: 'Legacy',
+        provider: 'openai',
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: 'key',
+        model: 'model',
+        timeout: 600,
+        apiMode: 'images',
+        codexCli: false,
+        apiProxy: false,
+      }],
+      activeProfileId: 'legacy',
+    })
+
+    expect(settings.profiles[0].serverApi).toBe(false)
+  })
+
   it('normalizes custom provider definitions and keeps custom profiles', () => {
     const settings = normalizeSettings({
       customProviders: [{
@@ -378,7 +398,7 @@ describe('custom providers', () => {
         timeout: 60,
         apiMode: 'images',
         codexCli: false,
-        apiProxy: false,
+        serverApi: false,
       }],
       activeProfileId: 'profile-custom',
     })
@@ -533,7 +553,7 @@ describe('custom providers', () => {
     const openaiProfile = createDefaultOpenAIProfile({
       baseUrl: 'https://api.compat.example.com/v1',
       model: 'custom-openai-model',
-      apiProxy: false,
+      serverApi: false,
     })
 
     const falProfile = switchApiProfileProvider(openaiProfile, 'fal')
@@ -542,6 +562,6 @@ describe('custom providers', () => {
     expect(falProfile.baseUrl).toBe(DEFAULT_FAL_BASE_URL)
     expect(restoredProfile.baseUrl).toBe('https://api.compat.example.com/v1')
     expect(restoredProfile.model).toBe('custom-openai-model')
-    expect(restoredProfile.apiProxy).toBe(false)
+    expect(restoredProfile.serverApi).toBe(false)
   })
 })
