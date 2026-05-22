@@ -269,7 +269,6 @@ export function createDefaultOpenAIProfile(overrides: Partial<ApiProfile> = {}):
     codexCli: false,
     ...overrides,
     serverApi,
-    apiProxy: serverApi,
   }
 }
 
@@ -287,7 +286,6 @@ export function createDefaultFalProfile(overrides: Partial<ApiProfile> = {}): Ap
     codexCli: false,
     ...overrides,
     serverApi,
-    apiProxy: serverApi,
   }
 }
 
@@ -315,7 +313,6 @@ export function switchApiProfileProvider(profile: ApiProfile, provider: ApiProvi
       apiMode: savedDraft?.apiMode ?? 'images',
       codexCli: false,
       serverApi,
-      apiProxy: serverApi,
       responseFormatB64Json: savedDraft?.responseFormatB64Json,
       providerDrafts,
     }
@@ -332,7 +329,6 @@ export function switchApiProfileProvider(profile: ApiProfile, provider: ApiProvi
       apiMode: savedDraft?.apiMode ?? 'images',
       codexCli: false,
       serverApi,
-      apiProxy: serverApi,
       responseFormatB64Json: savedDraft?.responseFormatB64Json,
       providerDrafts,
     }
@@ -347,7 +343,6 @@ export function switchApiProfileProvider(profile: ApiProfile, provider: ApiProvi
     apiMode: savedDraft?.apiMode ?? profile.apiMode,
     codexCli: savedDraft?.codexCli ?? profile.codexCli,
     serverApi,
-    apiProxy: serverApi,
     responseFormatB64Json: savedDraft?.responseFormatB64Json,
     providerDrafts,
   }
@@ -385,14 +380,9 @@ function normalizeProviderDrafts(input: unknown, customProviderIds: Set<string>)
   return entries.length ? Object.fromEntries(entries) : undefined
 }
 
-/** 读取服务端 API 开关，并兼容旧版 apiProxy 字段。 */
+/** 读取服务端 API 开关。 */
 function readServerApiFlag(record: Record<string, unknown>, defaults: Pick<ApiProfile, 'serverApi'>): boolean {
-  if (typeof record.serverApi === 'boolean' && typeof record.apiProxy === 'boolean') {
-    // 过渡期旧 UI/store 只写 apiProxy；两者冲突时将旧字段视为最新写入意图。
-    return record.serverApi === record.apiProxy ? record.serverApi : record.apiProxy
-  }
   if (typeof record.serverApi === 'boolean') return record.serverApi
-  if (typeof record.apiProxy === 'boolean') return record.apiProxy
   return defaults.serverApi
 }
 
@@ -420,7 +410,6 @@ export function normalizeApiProfile(input: unknown, fallback?: Partial<ApiProfil
     apiMode,
     codexCli: Boolean(record.codexCli),
     serverApi,
-    apiProxy: serverApi,
     responseFormatB64Json: record.responseFormatB64Json === true ? true : undefined,
     providerDrafts: normalizeProviderDrafts(record.providerDrafts, customProviderIds),
   }
@@ -472,7 +461,6 @@ export function normalizeSettings(input: Partial<AppSettings> | unknown): AppSet
     apiMode: active.apiMode,
     codexCli: active.codexCli,
     serverApi: activeServerApi,
-    apiProxy: activeServerApi,
     customProviders,
     providerOrder: Array.isArray(record.providerOrder) ? record.providerOrder.map(String) : undefined,
     clearInputAfterSubmit: typeof record.clearInputAfterSubmit === 'boolean' ? record.clearInputAfterSubmit : false,
@@ -575,7 +563,6 @@ export function getActiveApiProfile(settings: Partial<AppSettings> | unknown): A
     apiMode: record.apiMode === 'images' || record.apiMode === 'responses' ? record.apiMode : profile.apiMode,
     codexCli: typeof record.codexCli === 'boolean' ? record.codexCli : profile.codexCli,
     serverApi,
-    apiProxy: serverApi,
   }
 }
 

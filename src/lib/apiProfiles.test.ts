@@ -359,74 +359,18 @@ describe('mergeImportedSettings', () => {
 })
 
 describe('custom providers', () => {
-  it('exposes legacy apiProxy as serverApi mirror on normalized settings', () => {
+  it('keeps serverApi on normalized settings', () => {
     const settings = normalizeSettings({
       serverApi: false,
     })
 
     expect(settings.serverApi).toBe(false)
-    expect(settings.apiProxy).toBe(false)
     expect(settings.profiles[0].serverApi).toBe(false)
-    expect(settings.profiles[0].apiProxy).toBe(false)
-  })
-
-  it('exposes legacy apiProxy mirror when migrating legacy profile input', () => {
-    const settings = normalizeSettings({
-      profiles: [{
-        id: 'legacy-mirror',
-        name: 'Legacy Mirror',
-        provider: 'openai',
-        baseUrl: 'https://api.example.com/v1',
-        apiKey: 'key',
-        model: 'model',
-        timeout: 600,
-        apiMode: 'images',
-        codexCli: false,
-        apiProxy: false,
-      }],
-      activeProfileId: 'legacy-mirror',
-    })
-
-    expect(settings.profiles[0].serverApi).toBe(false)
-    expect(settings.profiles[0].apiProxy).toBe(false)
-  })
-
-  it('honors legacy apiProxy writes over existing serverApi on legacy single-config settings', () => {
-    const settings = normalizeSettings({
-      serverApi: true,
-      apiProxy: false,
-    })
-
-    expect(settings.serverApi).toBe(false)
-    expect(settings.apiProxy).toBe(false)
-  })
-
-  it('honors legacy apiProxy writes over existing serverApi on profiles', () => {
-    const settings = normalizeSettings({
-      profiles: [{
-        id: 'legacy-write',
-        name: 'Legacy Write',
-        provider: 'openai',
-        baseUrl: 'https://api.example.com/v1',
-        apiKey: 'key',
-        model: 'model',
-        timeout: 600,
-        apiMode: 'images',
-        codexCli: false,
-        serverApi: true,
-        apiProxy: false,
-      }],
-      activeProfileId: 'legacy-write',
-    })
-
-    expect(settings.profiles[0].serverApi).toBe(false)
-    expect(settings.profiles[0].apiProxy).toBe(false)
   })
 
   it('mirrors the active profile serverApi when profiles are supplied', () => {
     const settings = normalizeSettings({
       serverApi: true,
-      apiProxy: true,
       profiles: [
         createDefaultOpenAIProfile({ id: 'profile-a', name: 'Profile A', serverApi: true }),
         createDefaultOpenAIProfile({ id: 'profile-b', name: 'Profile B', serverApi: false }),
@@ -435,15 +379,12 @@ describe('custom providers', () => {
     })
 
     expect(settings.serverApi).toBe(false)
-    expect(settings.apiProxy).toBe(false)
     expect(settings.profiles[1].serverApi).toBe(false)
-    expect(settings.profiles[1].apiProxy).toBe(false)
   })
 
   it('returns the active profile serverApi from getActiveApiProfile when profiles are supplied', () => {
     const profile = getActiveApiProfile({
       serverApi: true,
-      apiProxy: true,
       profiles: [
         createDefaultOpenAIProfile({ id: 'profile-a', name: 'Profile A', serverApi: true }),
         createDefaultOpenAIProfile({ id: 'profile-b', name: 'Profile B', serverApi: false }),
@@ -452,28 +393,8 @@ describe('custom providers', () => {
     })
 
     expect(profile.serverApi).toBe(false)
-    expect(profile.apiProxy).toBe(false)
   })
 
-  it('migrates legacy apiProxy to serverApi', () => {
-    const settings = normalizeSettings({
-      profiles: [{
-        id: 'legacy',
-        name: 'Legacy',
-        provider: 'openai',
-        baseUrl: 'https://api.example.com/v1',
-        apiKey: 'key',
-        model: 'model',
-        timeout: 600,
-        apiMode: 'images',
-        codexCli: false,
-        apiProxy: false,
-      }],
-      activeProfileId: 'legacy',
-    })
-
-    expect(settings.profiles[0].serverApi).toBe(false)
-  })
 
   it('normalizes custom provider definitions and keeps custom profiles', () => {
     const settings = normalizeSettings({

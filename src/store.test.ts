@@ -276,7 +276,7 @@ describe('reused task API profile', () => {
     expect(settings.profiles[0].serverApi).toBe(true)
   })
 
-  it('turns off serverApi and legacy mirror through setSettings', () => {
+  it('turns off serverApi through setSettings', () => {
     const openaiProfile = createDefaultOpenAIProfile({
       id: 'openai-profile',
       apiKey: 'openai-key',
@@ -294,15 +294,11 @@ describe('reused task API profile', () => {
 
     const activeProfile = useStore.getState().settings.profiles[0]
     expect(activeProfile.serverApi).toBe(false)
-    expect(activeProfile.apiProxy).toBe(false)
   })
 
-  it('submits reused OpenAI profiles with serverApi instead of legacy apiProxy', async () => {
+  it('submits reused OpenAI profiles with their own serverApi setting', async () => {
     const currentProfile = createDefaultOpenAIProfile({ id: 'current-profile', apiKey: 'current-key', serverApi: false })
-    const reusedProfile = {
-      ...createDefaultOpenAIProfile({ id: 'reused-profile', apiKey: 'reused-key', serverApi: false }),
-      apiProxy: true,
-    }
+    const reusedProfile = createDefaultOpenAIProfile({ id: 'reused-profile', apiKey: 'reused-key', serverApi: true })
     mockCallImageApi.mockRejectedValueOnce(new TypeError('Failed to fetch'))
     useStore.setState({
       settings: {
@@ -323,11 +319,9 @@ describe('reused task API profile', () => {
     expect(mockCallImageApi).toHaveBeenCalledWith(expect.objectContaining({
       settings: expect.objectContaining({
         activeProfileId: reusedProfile.id,
-        serverApi: false,
+        serverApi: true,
       }),
     }))
-    const requestSettings = mockCallImageApi.mock.calls[0][0].settings
-    expect(requestSettings.apiProxy).toBe(requestSettings.serverApi)
   })
 
   it('reuses the task API profile temporarily without switching the active profile', async () => {

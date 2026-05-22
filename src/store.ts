@@ -441,11 +441,9 @@ export const useStore = create<AppState>()(
           incoming.timeout !== undefined ||
           incoming.apiMode !== undefined ||
           incoming.codexCli !== undefined ||
-          incoming.serverApi !== undefined ||
-          incoming.apiProxy !== undefined
+          incoming.serverApi !== undefined
         const merged = normalizeSettings({ ...previous, ...incoming })
         if (hasLegacyOverrides && incoming.profiles === undefined) {
-          const incomingServerApi = incoming.serverApi ?? incoming.apiProxy
           merged.profiles = merged.profiles.map((profile) =>
             profile.id === merged.activeProfileId
               ? {
@@ -456,8 +454,7 @@ export const useStore = create<AppState>()(
                   timeout: incoming.timeout ?? profile.timeout,
                   apiMode: incoming.apiMode === 'images' || incoming.apiMode === 'responses' ? incoming.apiMode : profile.apiMode,
                   codexCli: incoming.codexCli ?? profile.codexCli,
-                  serverApi: incomingServerApi ?? profile.serverApi,
-                  apiProxy: incomingServerApi ?? profile.apiProxy,
+                  serverApi: incoming.serverApi ?? profile.serverApi,
                 }
               : profile,
           )
@@ -808,19 +805,17 @@ export function getTaskApiProfile(settings: AppSettings, task: TaskRecord): ApiP
 
 function createSettingsForApiProfile(settings: AppSettings, profile: ApiProfile): AppSettings {
   const normalized = normalizeSettings(settings)
-  const mirroredProfile = { ...profile, apiProxy: profile.serverApi }
   return normalizeSettings({
     ...normalized,
-    baseUrl: mirroredProfile.baseUrl,
-    apiKey: mirroredProfile.apiKey,
-    model: mirroredProfile.model,
-    timeout: mirroredProfile.timeout,
-    apiMode: mirroredProfile.apiMode,
-    codexCli: mirroredProfile.codexCli,
-    serverApi: mirroredProfile.serverApi,
-    apiProxy: mirroredProfile.serverApi,
-    profiles: normalized.profiles.map((item) => item.id === mirroredProfile.id ? mirroredProfile : item),
-    activeProfileId: mirroredProfile.id,
+    baseUrl: profile.baseUrl,
+    apiKey: profile.apiKey,
+    model: profile.model,
+    timeout: profile.timeout,
+    apiMode: profile.apiMode,
+    codexCli: profile.codexCli,
+    serverApi: profile.serverApi,
+    profiles: normalized.profiles.map((item) => item.id === profile.id ? profile : item),
+    activeProfileId: profile.id,
   })
 }
 

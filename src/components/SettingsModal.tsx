@@ -470,7 +470,6 @@ export default function SettingsModal() {
         model: profile.model.trim() || defaultModel,
         timeout: Number(profile.timeout) || DEFAULT_SETTINGS.timeout,
         serverApi: profile.provider === 'openai' ? profile.serverApi : false,
-        apiProxy: profile.provider === 'openai' ? profile.serverApi : false,
         codexCli: profile.provider === 'openai' ? profile.codexCli : false,
       }
     })

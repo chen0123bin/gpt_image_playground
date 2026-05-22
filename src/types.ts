@@ -63,8 +63,6 @@ export interface ApiProfile {
   apiMode: ApiMode
   codexCli: boolean
   serverApi: boolean
-  /** @deprecated 过渡兼容字段，请使用 serverApi。 */
-  apiProxy: boolean
   responseFormatB64Json?: boolean
   providerDrafts?: Partial<Record<ApiProvider, Partial<Pick<ApiProfile, 'baseUrl' | 'model' | 'apiMode' | 'codexCli' | 'serverApi' | 'responseFormatB64Json'>>>>
 }
@@ -78,8 +76,6 @@ export interface AppSettings {
   apiMode: ApiMode
   codexCli: boolean
   serverApi: boolean
-  /** @deprecated 过渡兼容字段，请使用 serverApi。 */
-  apiProxy: boolean
   customProviders: CustomProviderDefinition[]
   providerOrder?: string[]
   clearInputAfterSubmit: boolean
