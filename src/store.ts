@@ -804,7 +804,7 @@ export function getTaskApiProfile(settings: AppSettings, task: TaskRecord): ApiP
 
 function createSettingsForApiProfile(settings: AppSettings, profile: ApiProfile): AppSettings {
   const normalized = normalizeSettings(settings)
-  const requestSettings = normalizeSettings({
+  return normalizeSettings({
     ...normalized,
     baseUrl: profile.baseUrl,
     apiKey: profile.apiKey,
@@ -816,10 +816,6 @@ function createSettingsForApiProfile(settings: AppSettings, profile: ApiProfile)
     profiles: normalized.profiles.map((item) => item.id === profile.id ? profile : item),
     activeProfileId: profile.id,
   })
-  return {
-    ...requestSettings,
-    apiProxy: normalized.apiProxy,
-  }
 }
 
 function getReusedTaskApiProfile(settings: AppSettings, profileId: string | null): ApiProfile | null {

@@ -297,9 +297,10 @@ describe('reused task API profile', () => {
       settings: expect.objectContaining({
         activeProfileId: reusedProfile.id,
         serverApi: true,
-        apiProxy: false,
       }),
     }))
+    const requestSettings = mockCallImageApi.mock.calls[0][0].settings
+    expect(requestSettings.apiProxy).toBe(requestSettings.serverApi)
   })
 
   it('reuses the task API profile temporarily without switching the active profile', async () => {
