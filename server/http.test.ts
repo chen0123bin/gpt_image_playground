@@ -264,6 +264,36 @@ describe('server http app', () => {
     await expect(fallbackResponse.text()).resolves.toBe('<main>SPA fallback</main>')
   })
 
+  it('服务 JS 静态文件时替换运行时环境占位符', async () => {
+    const staticDir = await createStaticDir({
+      'assets/app.js': [
+        'const defaultApiUrl = "__VITE_DEFAULT_API_URL_PLACEHOLDER__"',
+        'const dockerDeployment = "__VITE_DOCKER_DEPLOYMENT_PLACEHOLDER__"',
+      ].join('\n'),
+    })
+    const app = createApp({ staticDir, defaultApiUrl: 'https://runtime.example.com/v1' })
+
+    const response = await app.fetch(new Request('http://localhost/assets/app.js'))
+
+    expect(response.status).toBe(200)
+    await expect(response.text()).resolves.toBe([
+      'const defaultApiUrl = "https://runtime.example.com/v1"',
+      'const dockerDeployment = "true"',
+    ].join('\n'))
+  })
+
+  it('服务非 JS 静态文件时不替换运行时环境占位符', async () => {
+    const cssContent = '.api::after { content: "__VITE_DEFAULT_API_URL_PLACEHOLDER__"; }'
+    const staticDir = await createStaticDir({ 'assets/app.css': cssContent })
+    const app = createApp({ staticDir, defaultApiUrl: 'https://runtime.example.com/v1' })
+
+    const response = await app.fetch(new Request('http://localhost/assets/app.css'))
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Content-Type')).toBe('text/css; charset=utf-8')
+    await expect(response.text()).resolves.toBe(cssContent)
+  })
+
   it('静态文件路径穿越不会读取目录外文件', async () => {
     const staticDir = await createStaticDir()
     await writeFile(join(staticDir, '..', 'secret.txt'), 'secret')

@@ -2,7 +2,6 @@ import { useEffect } from 'react'
 import { initStore } from './store'
 import { useStore } from './store'
 import { buildSettingsFromUrlParams, clearUrlSettingParams, hasUrlSettingParams } from './lib/urlSettings'
-import { useDockerApiUrlMigrationNotice } from './hooks/useDockerApiUrlMigrationNotice'
 import Header from './components/Header'
 import SearchBar from './components/SearchBar'
 import TaskGrid from './components/TaskGrid'
@@ -18,7 +17,6 @@ import SupportPromptModal from './components/SupportPromptModal'
 
 export default function App() {
   const setSettings = useStore((s) => s.setSettings)
-  useDockerApiUrlMigrationNotice()
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search)

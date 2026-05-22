@@ -1,7 +1,5 @@
-import { createReadStream } from 'node:fs'
-import { stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { extname, isAbsolute, relative, resolve } from 'node:path'
-import { Readable } from 'node:stream'
 import { callOpenAICompatibleFromServer, type ServerOpenAIRequest } from './openaiCompatible.js'
 import { normalizeErrorMessage, toHttpError } from './errors.js'
 
@@ -109,14 +107,35 @@ async function serveStatic(pathname: string, config: AppConfig, omitBody: boolea
   const indexPath = resolve(staticRoot, 'index.html')
   const requestedPath = resolveStaticPath(staticRoot, pathname)
   const filePath = requestedPath && await isFile(requestedPath) ? requestedPath : indexPath
+  const contentType = MIME_TYPES[extname(filePath).toLowerCase()] ?? 'application/octet-stream'
 
   if (!isPathInside(staticRoot, filePath) || !await isFile(filePath)) {
     return new Response('Not found', { status: 404 })
   }
 
-  return new Response(omitBody ? null : Readable.toWeb(createReadStream(filePath)) as BodyInit, {
-    headers: { 'Content-Type': MIME_TYPES[extname(filePath).toLowerCase()] ?? 'application/octet-stream' },
+  if (omitBody) {
+    return new Response(null, {
+      headers: { 'Content-Type': contentType },
+    })
+  }
+
+  if (extname(filePath).toLowerCase() === '.js') {
+    const content = await readFile(filePath, 'utf8')
+    return new Response(replaceRuntimePlaceholders(content, config), {
+      headers: { 'Content-Type': contentType },
+    })
+  }
+
+  return new Response(await readFile(filePath), {
+    headers: { 'Content-Type': contentType },
   })
+}
+
+/** 替换前端构建产物中的运行时环境占位符。 */
+function replaceRuntimePlaceholders(content: string, config: AppConfig): string {
+  return content
+    .replaceAll('__VITE_DEFAULT_API_URL_PLACEHOLDER__', config.defaultApiUrl)
+    .replaceAll('__VITE_DOCKER_DEPLOYMENT_PLACEHOLDER__', 'true')
 }
 
 /** 将 URL 路径解析为静态目录内的候选文件路径。 */
