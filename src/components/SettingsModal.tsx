@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { normalizeBaseUrl } from '../lib/api'
-import { isApiProxyAvailable, isApiProxyLocked, readClientDevProxyConfig } from '../lib/devProxy'
 import { useStore, exportData, importData, clearData } from '../store'
 import {
   createDefaultOpenAIProfile,
@@ -164,7 +163,7 @@ function isPristineNewOpenAIProfile(profile: ApiProfile) {
     profile.timeout === DEFAULT_SETTINGS.timeout &&
     profile.apiMode === 'images' &&
     profile.codexCli === false &&
-    profile.apiProxy === defaultProfile.apiProxy
+    profile.serverApi === defaultProfile.serverApi
 }
 
 function getImportedProfileFromMergedSettings(
@@ -323,12 +322,8 @@ export default function SettingsModal() {
   const [copyImportUrlProfile, setCopyImportUrlProfile] = useState<ApiProfile | null>(null)
   const [copyImportUrlOptions, setCopyImportUrlOptions] = useState<CopyImportUrlOptions>(readCopyImportUrlOptions)
 
-  const apiProxyConfig = readClientDevProxyConfig()
-  const apiProxyAvailable = isApiProxyAvailable(apiProxyConfig)
-  const apiProxyLocked = isApiProxyLocked(apiProxyConfig)
   const activeProfile = draft.profiles.find((profile) => profile.id === draft.activeProfileId) ?? draft.profiles[0] ?? getActiveApiProfile(draft)
-  const apiProxyChecked = activeProfile.provider === 'openai' && (apiProxyLocked || activeProfile.apiProxy)
-  const apiProxyEnabled = apiProxyAvailable && activeProfile.provider === 'openai' && apiProxyChecked
+  const serverApiEnabled = activeProfile.provider === 'openai' && activeProfile.serverApi
   const activeProviderIsOpenAICompatible = isOpenAICompatibleProvider(draft, activeProfile.provider)
   const activeProviderUsesApiUrl = activeProviderIsOpenAICompatible || activeProfile.provider === 'fal'
   const activeCustomProvider = draft.customProviders.find((provider) => provider.id === activeProfile.provider)
@@ -381,18 +376,10 @@ export default function SettingsModal() {
     const displaySettings = normalizedSettings.reuseTaskApiProfileTemporarily && reusedTaskApiProfileId && normalizedSettings.profiles.some((profile) => profile.id === reusedTaskApiProfileId)
       ? normalizeSettings({ ...normalizedSettings, activeProfileId: reusedTaskApiProfileId })
       : normalizedSettings
-    const nextDraft = normalizeSettings({
-      ...displaySettings,
-      profiles: displaySettings.profiles.map((profile) => ({
-        ...profile,
-        apiProxy: profile.provider === 'openai' && apiProxyAvailable
-          ? (apiProxyLocked || profile.apiProxy)
-          : false,
-      })),
-    })
+    const nextDraft = normalizeSettings(displaySettings)
     setDraft(nextDraft)
     setTimeoutInput(String(getActiveApiProfile(nextDraft).timeout))
-  }, [apiProxyAvailable, apiProxyLocked, showSettings, settings, reusedTaskApiProfileId])
+  }, [showSettings, settings, reusedTaskApiProfileId])
 
   useEffect(() => {
     setTimeoutInput(String(activeProfile.timeout))
@@ -482,7 +469,7 @@ export default function SettingsModal() {
         baseUrl: normalizedBaseUrl,
         model: profile.model.trim() || defaultModel,
         timeout: Number(profile.timeout) || DEFAULT_SETTINGS.timeout,
-        apiProxy: profile.provider === 'openai' && apiProxyAvailable ? (apiProxyLocked || profile.apiProxy) : false,
+        serverApi: profile.provider === 'openai' ? profile.serverApi : false,
         codexCli: profile.provider === 'openai' ? profile.codexCli : false,
       }
     })
@@ -1401,17 +1388,14 @@ export default function SettingsModal() {
                     onChange={(e) => updateActiveProfile({ baseUrl: e.target.value })}
                     onBlur={(e) => commitActiveProfilePatch({ baseUrl: e.target.value })}
                     type="text"
-                    disabled={apiProxyEnabled}
                     placeholder={activeProfile.provider === 'fal' ? DEFAULT_FAL_BASE_URL : DEFAULT_SETTINGS.baseUrl}
-                    className={`w-full rounded-xl border border-gray-200/70 bg-white/60 px-3 py-2.5 text-sm text-gray-700 outline-none transition focus:border-blue-300 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-200 dark:focus:border-blue-500/50 ${apiProxyEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className="w-full rounded-xl border border-gray-200/70 bg-white/60 px-3 py-2.5 text-sm text-gray-700 outline-none transition focus:border-blue-300 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-200 dark:focus:border-blue-500/50"
                   />
                   <div data-selectable-text className="mt-1.5 min-h-[22px] flex items-center text-xs text-gray-500 dark:text-gray-500">
-                    {apiProxyEnabled ? (
-                      <span className="text-yellow-600 dark:text-yellow-500">已开启代理，实际请求目标由部署端决定，此处设置被忽略。</span>
-                    ) : activeProfile.provider === 'fal' ? (
+                    {activeProfile.provider === 'fal' ? (
                       <span>默认使用 <code className="bg-gray-100 dark:bg-white/[0.06] px-1 py-0.5 rounded">{DEFAULT_FAL_BASE_URL}</code>；填写自定义地址时将作为 fal.ai 代理 URL。</span>
                     ) : (
-                      <span>支持通过查询参数覆盖：<code className="bg-gray-100 dark:bg-white/[0.06] px-1 py-0.5 rounded">?apiUrl=</code></span>
+                      <span>服务端 API 模式会由本项目后端请求该地址。支持通过查询参数覆盖：<code className="bg-gray-100 dark:bg-white/[0.06] px-1 py-0.5 rounded">?apiUrl=</code></span>
                     )}
                   </div>
                 </label>
@@ -1438,26 +1422,23 @@ export default function SettingsModal() {
                 </div>
               )}
 
-              {apiProxyAvailable && activeProfile.provider === 'openai' && (
+              {activeProfile.provider === 'openai' && (
                 <div className="block">
                   <div className="mb-1.5 flex items-center justify-between">
-                    <span className="block text-sm text-gray-600 dark:text-gray-300">API 代理</span>
+                    <span className="block text-sm text-gray-600 dark:text-gray-300">服务端 API 模式</span>
                     <button
                       type="button"
-                      onClick={() => {
-                        if (!apiProxyLocked) updateActiveProfile({ apiProxy: !activeProfile.apiProxy }, true)
-                      }}
-                      disabled={apiProxyLocked}
-                      className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${apiProxyChecked ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'} ${apiProxyLocked ? 'cursor-not-allowed opacity-70' : ''}`}
+                      onClick={() => updateActiveProfile({ serverApi: !activeProfile.serverApi }, true)}
+                      className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${serverApiEnabled ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}
                       role="switch"
-                      aria-checked={apiProxyChecked}
-                      aria-label="API 代理"
+                      aria-checked={serverApiEnabled}
+                      aria-label="服务端 API 模式"
                     >
-                      <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${apiProxyChecked ? 'translate-x-[14px]' : 'translate-x-[2px]'}`} />
+                      <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${serverApiEnabled ? 'translate-x-[14px]' : 'translate-x-[2px]'}`} />
                     </button>
                   </div>
                   <div data-selectable-text className="text-xs text-gray-500 dark:text-gray-500">
-                    {apiProxyLocked ? '当前部署已锁定 API 代理为开启，API URL 设置会被忽略。' : '当前部署提供同源代理时默认开启，可手动关闭。开启后用于解决浏览器跨域限制，API URL 设置会被忽略。'}
+                    开启后浏览器只请求同源后端，由后端访问 OpenAI 兼容接口并下载结果图片。
                   </div>
                 </div>
               )}

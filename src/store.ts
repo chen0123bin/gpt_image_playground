@@ -441,6 +441,7 @@ export const useStore = create<AppState>()(
           incoming.timeout !== undefined ||
           incoming.apiMode !== undefined ||
           incoming.codexCli !== undefined ||
+          incoming.serverApi !== undefined ||
           incoming.apiProxy !== undefined
         const merged = normalizeSettings({ ...previous, ...incoming })
         if (hasLegacyOverrides && incoming.profiles === undefined) {
@@ -454,7 +455,7 @@ export const useStore = create<AppState>()(
                   timeout: incoming.timeout ?? profile.timeout,
                   apiMode: incoming.apiMode === 'images' || incoming.apiMode === 'responses' ? incoming.apiMode : profile.apiMode,
                   codexCli: incoming.codexCli ?? profile.codexCli,
-                  apiProxy: incoming.apiProxy ?? profile.apiProxy,
+                  serverApi: incoming.serverApi ?? incoming.apiProxy ?? profile.serverApi,
                 }
               : profile,
           )
@@ -803,7 +804,7 @@ export function getTaskApiProfile(settings: AppSettings, task: TaskRecord): ApiP
 
 function createSettingsForApiProfile(settings: AppSettings, profile: ApiProfile): AppSettings {
   const normalized = normalizeSettings(settings)
-  return normalizeSettings({
+  const requestSettings = normalizeSettings({
     ...normalized,
     baseUrl: profile.baseUrl,
     apiKey: profile.apiKey,
@@ -811,10 +812,14 @@ function createSettingsForApiProfile(settings: AppSettings, profile: ApiProfile)
     timeout: profile.timeout,
     apiMode: profile.apiMode,
     codexCli: profile.codexCli,
-    apiProxy: profile.apiProxy,
+    serverApi: profile.serverApi,
     profiles: normalized.profiles.map((item) => item.id === profile.id ? profile : item),
     activeProfileId: profile.id,
   })
+  return {
+    ...requestSettings,
+    apiProxy: normalized.apiProxy,
+  }
 }
 
 function getReusedTaskApiProfile(settings: AppSettings, profileId: string | null): ApiProfile | null {
@@ -845,13 +850,13 @@ function getApiRequestNetworkErrorHint(err: unknown, task: TaskRecord, settings:
 
   const profile = getTaskApiProfile(settings, task)
   const elapsedSeconds = Math.max(0, (Date.now() - task.createdAt) / 1000)
-  const usesApiProxy = profile?.apiProxy ?? settings.apiProxy
+  const usesServerApi = profile?.serverApi ?? settings.serverApi
 
   if (elapsedSeconds <= 15) {
-    if (usesApiProxy) {
-      return '提示：请求立即失败，请检查 API 代理服务是否正常运行。'
+    if (usesServerApi) {
+      return '提示：请求立即失败，请检查本项目后端服务是否正常运行。'
     }
-    return '提示：接口可能不支持浏览器跨域请求，可开启 API 代理解决。'
+    return '提示：接口可能不支持浏览器跨域请求，可开启服务端 API 模式解决。'
   }
 
   if (elapsedSeconds >= 55 && elapsedSeconds <= 75) {

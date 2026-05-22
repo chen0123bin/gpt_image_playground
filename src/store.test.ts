@@ -3,6 +3,12 @@ import { DEFAULT_PARAMS } from './types'
 import { createDefaultFalProfile, createDefaultOpenAIProfile, DEFAULT_SETTINGS, normalizeSettings } from './lib/apiProfiles'
 import type { StoredImage, StoredImageThumbnail, TaskRecord } from './types'
 import { getSelectedImageMentionLabel } from './lib/promptImageMentions'
+const mockCallImageApi = vi.hoisted(() => vi.fn())
+
+vi.mock('./lib/api', () => ({
+  callImageApi: mockCallImageApi,
+}))
+
 vi.mock('./lib/db', () => {
   const tasks = new Map<string, TaskRecord>()
   const images = new Map<string, StoredImage>()
@@ -56,6 +62,16 @@ import { editOutputs, getPersistedState, getTaskApiProfile, markInterruptedOpenA
 const imageA = { id: 'image-a', dataUrl: 'data:image/png;base64,a' }
 const imageB = { id: 'image-b', dataUrl: 'data:image/png;base64,b' }
 
+/** 等待任务进入错误态，便于断言异步提交后的错误提示。 */
+async function waitForTaskError(taskId: string): Promise<TaskRecord> {
+  for (let i = 0; i < 20; i++) {
+    const taskRecord = useStore.getState().tasks.find((item) => item.id === taskId)
+    if (taskRecord?.status === 'error') return taskRecord
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+  throw new Error(`任务 ${taskId} 未进入错误态`)
+}
+
 function task(overrides: Partial<TaskRecord> = {}): TaskRecord {
   return {
     id: 'task-a',
@@ -76,6 +92,7 @@ function task(overrides: Partial<TaskRecord> = {}): TaskRecord {
 
 describe('mask draft lifecycle in store actions', () => {
   beforeEach(() => {
+    mockCallImageApi.mockReset()
     useStore.setState({
       settings: { ...DEFAULT_SETTINGS, apiKey: 'test-key' },
       prompt: 'prompt',
@@ -176,6 +193,7 @@ describe('interrupted OpenAI running tasks', () => {
 
 describe('input persistence setting', () => {
   beforeEach(() => {
+    mockCallImageApi.mockReset()
     useStore.setState({
       settings: { ...DEFAULT_SETTINGS },
       prompt: 'prompt',
@@ -241,6 +259,47 @@ describe('reused task API profile', () => {
     const resolved = getTaskApiProfile(useStore.getState().settings, task({ apiProvider: 'fal', apiProfileId: falProfile.id }))
 
     expect(resolved?.id).toBe(falProfile.id)
+  })
+
+  it('keeps serverApi on reused OpenAI task profiles', () => {
+    const openaiProfile = createDefaultOpenAIProfile({
+      id: 'openai-profile',
+      apiKey: 'openai-key',
+      serverApi: true,
+    })
+    const settings = normalizeSettings({
+      ...DEFAULT_SETTINGS,
+      profiles: [openaiProfile],
+      activeProfileId: openaiProfile.id,
+    })
+
+    expect(settings.profiles[0].serverApi).toBe(true)
+  })
+
+  it('submits reused OpenAI profiles with serverApi instead of legacy apiProxy', async () => {
+    const currentProfile = createDefaultOpenAIProfile({ id: 'current-profile', apiKey: 'current-key', serverApi: false })
+    const reusedProfile = createDefaultOpenAIProfile({ id: 'reused-profile', apiKey: 'reused-key', serverApi: true })
+    mockCallImageApi.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    useStore.setState({
+      settings: normalizeSettings({
+        ...DEFAULT_SETTINGS,
+        profiles: [currentProfile, reusedProfile],
+        activeProfileId: currentProfile.id,
+        reuseTaskApiProfileTemporarily: true,
+      }),
+      prompt: 'prompt',
+      reusedTaskApiProfileId: reusedProfile.id,
+    })
+
+    await submitTask()
+
+    expect(mockCallImageApi).toHaveBeenCalledWith(expect.objectContaining({
+      settings: expect.objectContaining({
+        activeProfileId: reusedProfile.id,
+        serverApi: true,
+        apiProxy: false,
+      }),
+    }))
   })
 
   it('reuses the task API profile temporarily without switching the active profile', async () => {
@@ -326,5 +385,57 @@ describe('reused task API profile', () => {
       cancelText: '放弃提交',
     }))
     expect(state.showSettings).toBe(false)
+  })
+})
+
+describe('API network error hints', () => {
+  beforeEach(() => {
+    mockCallImageApi.mockReset()
+    useStore.setState({
+      settings: { ...DEFAULT_SETTINGS },
+      prompt: 'prompt',
+      inputImages: [],
+      maskDraft: null,
+      params: { ...DEFAULT_PARAMS },
+      tasks: [],
+      toast: null,
+      detailTaskId: null,
+      showToast: vi.fn(),
+      setConfirmDialog: vi.fn(),
+    })
+  })
+
+  it('suggests checking backend service when OpenAI serverApi request fails immediately', async () => {
+    const profile = createDefaultOpenAIProfile({ id: 'server-profile', apiKey: 'openai-key', serverApi: true })
+    mockCallImageApi.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    useStore.setState({
+      settings: normalizeSettings({
+        ...DEFAULT_SETTINGS,
+        profiles: [profile],
+        activeProfileId: profile.id,
+      }),
+    })
+
+    await submitTask()
+    const taskRecord = await waitForTaskError(useStore.getState().tasks[0].id)
+
+    expect(taskRecord.error).toContain('提示：请求立即失败，请检查本项目后端服务是否正常运行。')
+  })
+
+  it('suggests enabling server API mode when browser OpenAI request fails immediately', async () => {
+    const profile = createDefaultOpenAIProfile({ id: 'browser-profile', apiKey: 'openai-key', serverApi: false })
+    mockCallImageApi.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    useStore.setState({
+      settings: normalizeSettings({
+        ...DEFAULT_SETTINGS,
+        profiles: [profile],
+        activeProfileId: profile.id,
+      }),
+    })
+
+    await submitTask()
+    const taskRecord = await waitForTaskError(useStore.getState().tasks[0].id)
+
+    expect(taskRecord.error).toContain('提示：接口可能不支持浏览器跨域请求，可开启服务端 API 模式解决。')
   })
 })
