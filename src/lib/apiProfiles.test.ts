@@ -8,6 +8,7 @@ import {
   createDefaultOpenAIProfile,
   createDefaultFalProfile,
   findEquivalentApiProfile,
+  getActiveApiProfile,
   importCustomProviderDefinitionFromJson,
   importCustomProviderSettingsFromJson,
   mergeImportedSettings,
@@ -390,9 +391,9 @@ describe('custom providers', () => {
     expect(settings.profiles[0].apiProxy).toBe(false)
   })
 
-  it('honors legacy apiProxy writes over existing serverApi on normalized settings', () => {
+  it('honors legacy apiProxy writes over existing serverApi on legacy single-config settings', () => {
     const settings = normalizeSettings({
-      ...DEFAULT_SETTINGS,
+      serverApi: true,
       apiProxy: false,
     })
 
@@ -420,6 +421,38 @@ describe('custom providers', () => {
 
     expect(settings.profiles[0].serverApi).toBe(false)
     expect(settings.profiles[0].apiProxy).toBe(false)
+  })
+
+  it('mirrors the active profile serverApi when profiles are supplied', () => {
+    const settings = normalizeSettings({
+      serverApi: true,
+      apiProxy: true,
+      profiles: [
+        createDefaultOpenAIProfile({ id: 'profile-a', name: 'Profile A', serverApi: true }),
+        createDefaultOpenAIProfile({ id: 'profile-b', name: 'Profile B', serverApi: false }),
+      ],
+      activeProfileId: 'profile-b',
+    })
+
+    expect(settings.serverApi).toBe(false)
+    expect(settings.apiProxy).toBe(false)
+    expect(settings.profiles[1].serverApi).toBe(false)
+    expect(settings.profiles[1].apiProxy).toBe(false)
+  })
+
+  it('returns the active profile serverApi from getActiveApiProfile when profiles are supplied', () => {
+    const profile = getActiveApiProfile({
+      serverApi: true,
+      apiProxy: true,
+      profiles: [
+        createDefaultOpenAIProfile({ id: 'profile-a', name: 'Profile A', serverApi: true }),
+        createDefaultOpenAIProfile({ id: 'profile-b', name: 'Profile B', serverApi: false }),
+      ],
+      activeProfileId: 'profile-b',
+    })
+
+    expect(profile.serverApi).toBe(false)
+    expect(profile.apiProxy).toBe(false)
   })
 
   it('migrates legacy apiProxy to serverApi', () => {

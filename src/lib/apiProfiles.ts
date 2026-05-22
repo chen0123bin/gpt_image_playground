@@ -454,14 +454,15 @@ export function normalizeSettings(input: Partial<AppSettings> | unknown): AppSet
     serverApi: legacyServerApi,
     responseFormatB64Json: record.responseFormatB64Json === true ? true : undefined,
   })
-  const profiles = Array.isArray(record.profiles) && record.profiles.length
-    ? record.profiles.map((profile) => normalizeApiProfile(profile, undefined, customProviderIds))
+  const hasProfileRecords = Array.isArray(record.profiles) && record.profiles.length > 0
+  const profiles = hasProfileRecords
+    ? (record.profiles as unknown[]).map((profile) => normalizeApiProfile(profile, undefined, customProviderIds))
     : [legacyProfile]
   const activeProfileId = typeof record.activeProfileId === 'string' && profiles.some((p) => p.id === record.activeProfileId)
     ? record.activeProfileId
     : profiles[0].id
   const active = profiles.find((p) => p.id === activeProfileId) ?? profiles[0]
-  const activeServerApi = readServerApiFlag(record, active)
+  const activeServerApi = hasProfileRecords ? active.serverApi : readServerApiFlag(record, active)
 
   return {
     baseUrl: active.baseUrl,
@@ -563,7 +564,7 @@ export function getActiveApiProfile(settings: Partial<AppSettings> | unknown): A
   const record = settings && typeof settings === 'object' ? settings as Record<string, unknown> : {}
   const normalized = normalizeSettings(settings)
   const profile = normalized.profiles.find((p) => p.id === normalized.activeProfileId) ?? normalized.profiles[0] ?? createDefaultOpenAIProfile()
-  const serverApi = readServerApiFlag(record, profile)
+  const serverApi = Array.isArray(record.profiles) && record.profiles.length > 0 ? profile.serverApi : readServerApiFlag(record, profile)
 
   return {
     ...profile,
