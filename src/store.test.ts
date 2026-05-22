@@ -276,17 +276,44 @@ describe('reused task API profile', () => {
     expect(settings.profiles[0].serverApi).toBe(true)
   })
 
-  it('submits reused OpenAI profiles with serverApi instead of legacy apiProxy', async () => {
-    const currentProfile = createDefaultOpenAIProfile({ id: 'current-profile', apiKey: 'current-key', serverApi: false })
-    const reusedProfile = createDefaultOpenAIProfile({ id: 'reused-profile', apiKey: 'reused-key', serverApi: true })
-    mockCallImageApi.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+  it('turns off serverApi and legacy mirror through setSettings', () => {
+    const openaiProfile = createDefaultOpenAIProfile({
+      id: 'openai-profile',
+      apiKey: 'openai-key',
+      serverApi: true,
+    })
     useStore.setState({
       settings: normalizeSettings({
         ...DEFAULT_SETTINGS,
-        profiles: [currentProfile, reusedProfile],
-        activeProfileId: currentProfile.id,
-        reuseTaskApiProfileTemporarily: true,
+        profiles: [openaiProfile],
+        activeProfileId: openaiProfile.id,
       }),
+    })
+
+    useStore.getState().setSettings({ serverApi: false })
+
+    const activeProfile = useStore.getState().settings.profiles[0]
+    expect(activeProfile.serverApi).toBe(false)
+    expect(activeProfile.apiProxy).toBe(false)
+  })
+
+  it('submits reused OpenAI profiles with serverApi instead of legacy apiProxy', async () => {
+    const currentProfile = createDefaultOpenAIProfile({ id: 'current-profile', apiKey: 'current-key', serverApi: false })
+    const reusedProfile = {
+      ...createDefaultOpenAIProfile({ id: 'reused-profile', apiKey: 'reused-key', serverApi: false }),
+      apiProxy: true,
+    }
+    mockCallImageApi.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    useStore.setState({
+      settings: {
+        ...normalizeSettings({
+          ...DEFAULT_SETTINGS,
+          profiles: [currentProfile, reusedProfile],
+          activeProfileId: currentProfile.id,
+          reuseTaskApiProfileTemporarily: true,
+        }),
+        profiles: [currentProfile, reusedProfile],
+      },
       prompt: 'prompt',
       reusedTaskApiProfileId: reusedProfile.id,
     })
@@ -296,7 +323,7 @@ describe('reused task API profile', () => {
     expect(mockCallImageApi).toHaveBeenCalledWith(expect.objectContaining({
       settings: expect.objectContaining({
         activeProfileId: reusedProfile.id,
-        serverApi: true,
+        serverApi: false,
       }),
     }))
     const requestSettings = mockCallImageApi.mock.calls[0][0].settings

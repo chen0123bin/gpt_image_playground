@@ -445,6 +445,7 @@ export const useStore = create<AppState>()(
           incoming.apiProxy !== undefined
         const merged = normalizeSettings({ ...previous, ...incoming })
         if (hasLegacyOverrides && incoming.profiles === undefined) {
+          const incomingServerApi = incoming.serverApi ?? incoming.apiProxy
           merged.profiles = merged.profiles.map((profile) =>
             profile.id === merged.activeProfileId
               ? {
@@ -455,7 +456,8 @@ export const useStore = create<AppState>()(
                   timeout: incoming.timeout ?? profile.timeout,
                   apiMode: incoming.apiMode === 'images' || incoming.apiMode === 'responses' ? incoming.apiMode : profile.apiMode,
                   codexCli: incoming.codexCli ?? profile.codexCli,
-                  serverApi: incoming.serverApi ?? incoming.apiProxy ?? profile.serverApi,
+                  serverApi: incomingServerApi ?? profile.serverApi,
+                  apiProxy: incomingServerApi ?? profile.apiProxy,
                 }
               : profile,
           )
@@ -778,6 +780,8 @@ export function getTaskApiProfile(settings: AppSettings, task: TaskRecord): ApiP
   const provider = task.apiProvider
 
   if (task.apiProfileId) {
+    const rawById = settings.profiles.find((profile) => profile.id === task.apiProfileId)
+    if (rawById && (!provider || rawById.provider === provider)) return rawById
     const byId = normalized.profiles.find((profile) => profile.id === task.apiProfileId)
     if (byId && (!provider || byId.provider === provider)) return byId
     return null
@@ -804,23 +808,25 @@ export function getTaskApiProfile(settings: AppSettings, task: TaskRecord): ApiP
 
 function createSettingsForApiProfile(settings: AppSettings, profile: ApiProfile): AppSettings {
   const normalized = normalizeSettings(settings)
+  const mirroredProfile = { ...profile, apiProxy: profile.serverApi }
   return normalizeSettings({
     ...normalized,
-    baseUrl: profile.baseUrl,
-    apiKey: profile.apiKey,
-    model: profile.model,
-    timeout: profile.timeout,
-    apiMode: profile.apiMode,
-    codexCli: profile.codexCli,
-    serverApi: profile.serverApi,
-    profiles: normalized.profiles.map((item) => item.id === profile.id ? profile : item),
-    activeProfileId: profile.id,
+    baseUrl: mirroredProfile.baseUrl,
+    apiKey: mirroredProfile.apiKey,
+    model: mirroredProfile.model,
+    timeout: mirroredProfile.timeout,
+    apiMode: mirroredProfile.apiMode,
+    codexCli: mirroredProfile.codexCli,
+    serverApi: mirroredProfile.serverApi,
+    apiProxy: mirroredProfile.serverApi,
+    profiles: normalized.profiles.map((item) => item.id === mirroredProfile.id ? mirroredProfile : item),
+    activeProfileId: mirroredProfile.id,
   })
 }
 
 function getReusedTaskApiProfile(settings: AppSettings, profileId: string | null): ApiProfile | null {
   if (!profileId) return null
-  return normalizeSettings(settings).profiles.find((profile) => profile.id === profileId) ?? null
+  return settings.profiles.find((profile) => profile.id === profileId) ?? null
 }
 
 function getTaskApiProfileName(task: TaskRecord) {
@@ -1100,7 +1106,7 @@ export async function submitTask(options: { allowFullMask?: boolean; useCurrentA
   let activeProfile = getActiveApiProfile(settings)
   let requestSettings = createSettingsForApiProfile(normalizedSettings, activeProfile)
   if (normalizedSettings.reuseTaskApiProfileTemporarily && (reusedTaskApiProfileId || reusedTaskApiProfileMissing)) {
-    const reusedProfile = getReusedTaskApiProfile(normalizedSettings, reusedTaskApiProfileId)
+    const reusedProfile = getReusedTaskApiProfile(settings, reusedTaskApiProfileId)
     if (!reusedProfile) {
       if (options.useCurrentApiProfileWhenReusedMissing) {
         useStore.getState().setReusedTaskApiProfile(null)
