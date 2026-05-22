@@ -26,6 +26,9 @@ async function createServerRequestPayload(opts: CallApiOptions, profile: ApiProf
   let maskDataUrl = opts.maskDataUrl ?? null
 
   if (opts.maskDataUrl) {
+    if (!inputImageDataUrls[0]) {
+      throw new Error('遮罩编辑需要至少一张输入图片')
+    }
     inputImageDataUrls[0] = await blobToDataUrl(await imageDataUrlToPngBlob(inputImageDataUrls[0]))
     maskDataUrl = await blobToDataUrl(await maskDataUrlToPngBlob(opts.maskDataUrl))
   }

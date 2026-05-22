@@ -93,6 +93,21 @@ describe('callServerOpenAICompatibleImageApi', () => {
     expect(body.maskDataUrl).toBe('data:image/png;base64,bWFzay1wbmc=')
   })
 
+  it('遮罩编辑缺少输入图时抛出明确业务错误且不发送请求', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      images: ['data:image/png;base64,bWFzaw=='],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+
+    await expect(callServerOpenAICompatibleImageApi({
+      settings: {} as any,
+      prompt: 'prompt',
+      params: DEFAULT_PARAMS,
+      inputImageDataUrls: [],
+      maskDataUrl: 'data:image/png;base64,bWFzaw==',
+    }, createDefaultOpenAIProfile({ apiKey: 'key', apiMode: 'images' }))).rejects.toThrow('遮罩编辑需要至少一张输入图片')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('非 OK 响应抛出上游错误消息', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
       error: { message: 'upstream failed' },
