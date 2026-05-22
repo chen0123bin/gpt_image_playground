@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-server/
 dev-proxy.config.json
 .wrangler/
 .worktrees/
