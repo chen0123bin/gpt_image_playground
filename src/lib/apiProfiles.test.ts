@@ -390,6 +390,38 @@ describe('custom providers', () => {
     expect(settings.profiles[0].apiProxy).toBe(false)
   })
 
+  it('honors legacy apiProxy writes over existing serverApi on normalized settings', () => {
+    const settings = normalizeSettings({
+      ...DEFAULT_SETTINGS,
+      apiProxy: false,
+    })
+
+    expect(settings.serverApi).toBe(false)
+    expect(settings.apiProxy).toBe(false)
+  })
+
+  it('honors legacy apiProxy writes over existing serverApi on profiles', () => {
+    const settings = normalizeSettings({
+      profiles: [{
+        id: 'legacy-write',
+        name: 'Legacy Write',
+        provider: 'openai',
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: 'key',
+        model: 'model',
+        timeout: 600,
+        apiMode: 'images',
+        codexCli: false,
+        serverApi: true,
+        apiProxy: false,
+      }],
+      activeProfileId: 'legacy-write',
+    })
+
+    expect(settings.profiles[0].serverApi).toBe(false)
+    expect(settings.profiles[0].apiProxy).toBe(false)
+  })
+
   it('migrates legacy apiProxy to serverApi', () => {
     const settings = normalizeSettings({
       profiles: [{

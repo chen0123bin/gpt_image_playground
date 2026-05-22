@@ -387,6 +387,10 @@ function normalizeProviderDrafts(input: unknown, customProviderIds: Set<string>)
 
 /** 读取服务端 API 开关，并兼容旧版 apiProxy 字段。 */
 function readServerApiFlag(record: Record<string, unknown>, defaults: Pick<ApiProfile, 'serverApi'>): boolean {
+  if (typeof record.serverApi === 'boolean' && typeof record.apiProxy === 'boolean') {
+    // 过渡期旧 UI/store 只写 apiProxy；两者冲突时将旧字段视为最新写入意图。
+    return record.serverApi === record.apiProxy ? record.serverApi : record.apiProxy
+  }
   if (typeof record.serverApi === 'boolean') return record.serverApi
   if (typeof record.apiProxy === 'boolean') return record.apiProxy
   return defaults.serverApi
@@ -457,7 +461,7 @@ export function normalizeSettings(input: Partial<AppSettings> | unknown): AppSet
     ? record.activeProfileId
     : profiles[0].id
   const active = profiles.find((p) => p.id === activeProfileId) ?? profiles[0]
-  const activeServerApi = active.serverApi
+  const activeServerApi = readServerApiFlag(record, active)
 
   return {
     baseUrl: active.baseUrl,
