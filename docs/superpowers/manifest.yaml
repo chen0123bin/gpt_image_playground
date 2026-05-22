@@ -1,0 +1,12 @@
+project_name: "gpt_image_playground 前后端分离改造"
+current_version: "v0.0.1"
+current_phase: "spec"
+updated_at: "2026-05-22 13:39:34"
+
+versions:
+  v0.0.1:
+    status: "active"
+    phase: "spec"
+    type: "feature"
+    spec: "docs/superpowers/v0.0.1/frontend-backend-separation-spec.md"
+    plan: ""
