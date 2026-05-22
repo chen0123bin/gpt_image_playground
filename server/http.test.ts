@@ -123,6 +123,16 @@ describe('server http app', () => {
     expect(payload.error.code).toBe('NOT_FOUND')
   })
 
+  it('未知 OpenAI 兼容端点优先返回 404', async () => {
+    const app = createTestApp()
+
+    const response = await app.fetch(new Request('http://localhost/api/openai-compatible/not-real'))
+    const payload = await response.json()
+
+    expect(response.status).toBe(404)
+    expect(payload.error.code).toBe('NOT_FOUND')
+  })
+
   it('拒绝非 POST 的 OpenAI 兼容接口请求', async () => {
     const app = createTestApp()
 

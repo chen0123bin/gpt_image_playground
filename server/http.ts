@@ -47,13 +47,13 @@ export async function handleRequest(request: Request, config: AppConfig): Promis
 
 /** 处理 OpenAI 兼容接口服务端 API 路由。 */
 async function handleOpenAICompatibleRoute(request: Request, pathname: string): Promise<Response> {
-  if (request.method !== 'POST') {
-    return jsonError(405, 'METHOD_NOT_ALLOWED', '仅支持 POST 请求')
-  }
-
   const endpoint = pathname.slice(OPENAI_COMPATIBLE_PREFIX.length)
   if (!isOpenAICompatibleEndpoint(endpoint)) {
     return jsonError(404, 'NOT_FOUND', '接口不存在')
+  }
+
+  if (request.method !== 'POST') {
+    return jsonError(405, 'METHOD_NOT_ALLOWED', '仅支持 POST 请求')
   }
 
   try {
