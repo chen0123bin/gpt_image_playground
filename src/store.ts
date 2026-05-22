@@ -777,8 +777,6 @@ export function getTaskApiProfile(settings: AppSettings, task: TaskRecord): ApiP
   const provider = task.apiProvider
 
   if (task.apiProfileId) {
-    const rawById = settings.profiles.find((profile) => profile.id === task.apiProfileId)
-    if (rawById && (!provider || rawById.provider === provider)) return rawById
     const byId = normalized.profiles.find((profile) => profile.id === task.apiProfileId)
     if (byId && (!provider || byId.provider === provider)) return byId
     return null
@@ -821,7 +819,7 @@ function createSettingsForApiProfile(settings: AppSettings, profile: ApiProfile)
 
 function getReusedTaskApiProfile(settings: AppSettings, profileId: string | null): ApiProfile | null {
   if (!profileId) return null
-  return settings.profiles.find((profile) => profile.id === profileId) ?? null
+  return normalizeSettings(settings).profiles.find((profile) => profile.id === profileId) ?? null
 }
 
 function getTaskApiProfileName(task: TaskRecord) {

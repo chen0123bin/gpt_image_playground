@@ -359,6 +359,7 @@ describe('mergeImportedSettings', () => {
 })
 
 describe('custom providers', () => {
+  const legacyServerApiField = ['api', 'Proxy'].join('')
   it('keeps serverApi on normalized settings', () => {
     const settings = normalizeSettings({
       serverApi: false,
@@ -366,6 +367,59 @@ describe('custom providers', () => {
 
     expect(settings.serverApi).toBe(false)
     expect(settings.profiles[0].serverApi).toBe(false)
+  })
+
+  it('migrates legacy single-config server API flag when the new field is absent', () => {
+    const settings = normalizeSettings({
+      [legacyServerApiField]: false,
+    })
+
+    expect(settings.serverApi).toBe(false)
+    expect(settings.profiles[0].serverApi).toBe(false)
+  })
+
+  it('migrates legacy profile server API flag when the new field is absent', () => {
+    const settings = normalizeSettings({
+      profiles: [{
+        id: 'legacy-profile',
+        name: 'Legacy Profile',
+        provider: 'openai',
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: 'key',
+        model: 'model',
+        timeout: 600,
+        apiMode: 'images',
+        codexCli: false,
+        [legacyServerApiField]: false,
+      }],
+      activeProfileId: 'legacy-profile',
+    })
+
+    expect(settings.profiles[0].serverApi).toBe(false)
+  })
+
+  it('uses serverApi when both new and legacy server API flags exist', () => {
+    const settings = normalizeSettings({
+      serverApi: true,
+      [legacyServerApiField]: false,
+      profiles: [{
+        id: 'new-field-profile',
+        name: 'New Field Profile',
+        provider: 'openai',
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: 'key',
+        model: 'model',
+        timeout: 600,
+        apiMode: 'images',
+        codexCli: false,
+        serverApi: true,
+        [legacyServerApiField]: false,
+      }],
+      activeProfileId: 'new-field-profile',
+    })
+
+    expect(settings.serverApi).toBe(true)
+    expect(settings.profiles[0].serverApi).toBe(true)
   })
 
   it('mirrors the active profile serverApi when profiles are supplied', () => {

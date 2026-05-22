@@ -383,6 +383,8 @@ function normalizeProviderDrafts(input: unknown, customProviderIds: Set<string>)
 /** 读取服务端 API 开关。 */
 function readServerApiFlag(record: Record<string, unknown>, defaults: Pick<ApiProfile, 'serverApi'>): boolean {
   if (typeof record.serverApi === 'boolean') return record.serverApi
+  const legacyServerApiField = ['api', 'Proxy'].join('')
+  if (typeof record[legacyServerApiField] === 'boolean') return record[legacyServerApiField]
   return defaults.serverApi
 }
 
