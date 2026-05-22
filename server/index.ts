@@ -76,9 +76,11 @@ function createWebHeaders(req: IncomingMessage): Headers {
 async function writeWebResponse(res: ServerResponse, response: Response, omitBody: boolean): Promise<void> {
   res.writeHead(response.status, createNodeHeaders(response))
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
+  let cleanupReaderCancel: (() => void) | undefined
 
   if (!omitBody && response.body) {
     reader = response.body.getReader()
+    cleanupReaderCancel = bindReaderCancelOnResponseClose(res, reader)
     try {
       while (true) {
         const { done, value } = await reader.read()
@@ -89,10 +91,36 @@ async function writeWebResponse(res: ServerResponse, response: Response, omitBod
       await reader.cancel(error).catch(() => undefined)
       throw error
     } finally {
+      cleanupReaderCancel()
       reader.releaseLock()
     }
   }
   res.end()
+}
+
+/** 响应连接关闭或报错时取消 Web body 读取，避免 reader.read() 长时间悬挂。 */
+function bindReaderCancelOnResponseClose(
+  res: ServerResponse,
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+): () => void {
+  const cancelReader = (error?: Error) => {
+    const reason = error ?? new Error('响应连接已关闭')
+    reader.cancel(reason).catch(() => undefined)
+  }
+  const onClose = () => {
+    if (!res.writableEnded) cancelReader()
+  }
+  const onError = (error: Error) => {
+    cancelReader(error)
+  }
+
+  res.once('close', onClose)
+  res.once('error', onError)
+
+  return () => {
+    res.off('close', onClose)
+    res.off('error', onError)
+  }
 }
 
 /** 将 Web Headers 转成 Node writeHead 可接收的普通对象。 */

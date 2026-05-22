@@ -385,15 +385,18 @@ describe('server http app', () => {
 
   it('Node 桥接写入失败时取消 Web 响应 body', async () => {
     let cancelCount = 0
-    let streamController: ReadableStreamDefaultController<Uint8Array>
+    let resolveCancel: () => void
+    const canceled = new Promise<void>((resolve) => {
+      resolveCancel = resolve
+    })
     const server = createNodeServer({
       fetch: () => Promise.resolve(new Response(new ReadableStream({
         start(controller) {
-          streamController = controller
           controller.enqueue(new TextEncoder().encode('first'))
         },
         cancel() {
           cancelCount += 1
+          resolveCancel()
         },
       }))),
     })
@@ -412,10 +415,51 @@ describe('server http app', () => {
         setTimeout(() => reject(new Error('未收到首个响应块')), 1000)
       })
 
-      streamController!.enqueue(new TextEncoder().encode('second'))
-      await delay(50)
+      await canceled
 
       expect(cancelCount).toBe(1)
+    } finally {
+      await close()
+    }
+  })
+
+  it('Node 桥接在等待下一块响应时客户端断开会取消 Web 响应 body', async () => {
+    let resolveCancel: () => void
+    const canceled = new Promise<void>((resolve) => {
+      resolveCancel = resolve
+    })
+    const server = createNodeServer({
+      fetch: () => Promise.resolve(new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('first'))
+        },
+        cancel() {
+          resolveCancel()
+        },
+      }))),
+    })
+    const { port, close } = await listenTestServer(server)
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const req = httpRequest({ hostname: '127.0.0.1', port, path: '/' }, (res) => {
+          res.once('data', () => {
+            req.destroy()
+            resolve()
+          })
+        })
+        req.on('error', () => undefined)
+        req.end()
+        const timeoutId = setTimeout(() => reject(new Error('未收到首个响应块')), 1000)
+        canceled.then(() => clearTimeout(timeoutId), () => clearTimeout(timeoutId))
+      })
+
+      await Promise.race([
+        canceled,
+        new Promise<never>((_resolve, reject) => {
+          setTimeout(() => reject(new Error('响应 body 未被取消')), 1000)
+        }),
+      ])
     } finally {
       await close()
     }
