@@ -3,7 +3,7 @@ import { stat } from 'node:fs/promises'
 import { extname, isAbsolute, relative, resolve } from 'node:path'
 import { Readable } from 'node:stream'
 import { callOpenAICompatibleFromServer, type ServerOpenAIRequest } from './openaiCompatible.js'
-import { toHttpError } from './errors.js'
+import { normalizeErrorMessage, toHttpError } from './errors.js'
 
 const OPENAI_COMPATIBLE_PREFIX = '/api/openai-compatible/'
 const OPENAI_COMPATIBLE_ENDPOINTS = ['images/generations', 'images/edits', 'responses'] as const
@@ -96,7 +96,7 @@ function jsonResponse(payload: unknown, status = 200): Response {
 function jsonError(status: number, code: string, message: string): Response {
   return jsonResponse({
     error: {
-      message,
+      message: normalizeErrorMessage(message),
       code,
       status,
     },

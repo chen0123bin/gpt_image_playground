@@ -1,8 +1,11 @@
+import { request as httpRequest } from 'node:http'
+import type { IncomingHttpHeaders, Server } from 'node:http'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createApp } from './http.js'
+import { createNodeServer } from './index.js'
 
 const tempStaticDirs: string[] = []
 
@@ -29,6 +32,55 @@ const requestBody = {
 /** 创建测试用 app，避免每个用例重复配置。 */
 function createTestApp(staticDir = 'dist') {
   return createApp({ staticDir, defaultApiUrl: 'https://api.openai.com/v1' })
+}
+
+/** 等待指定毫秒，用于测试 Node 客户端断连后的异步事件传播。 */
+function delay(ms: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
+
+/** 启动测试用 Node server，并返回端口与关闭函数。 */
+function listenTestServer(server: Server) {
+  return new Promise<{ port: number; close: () => Promise<void> }>((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => {
+      server.off('error', reject)
+      const address = server.address()
+      if (!address || typeof address === 'string') {
+        reject(new Error('测试服务器地址无效'))
+        return
+      }
+      resolve({
+        port: address.port,
+        close: () => new Promise<void>((closeResolve, closeReject) => {
+          server.close((error) => {
+            if (error) closeReject(error)
+            else closeResolve()
+          })
+        }),
+      })
+    })
+  })
+}
+
+/** 发送测试 HTTP 请求，并收集 Node 客户端收到的响应。 */
+function requestTestServer(port: number) {
+  return new Promise<{ statusCode: number | undefined; headers: IncomingHttpHeaders; body: string }>((resolve, reject) => {
+    const req = httpRequest({ hostname: '127.0.0.1', port, path: '/' }, (res) => {
+      let body = ''
+      res.setEncoding('utf8')
+      res.on('data', (chunk: string) => {
+        body += chunk
+      })
+      res.on('end', () => {
+        resolve({ statusCode: res.statusCode, headers: res.headers, body })
+      })
+    })
+    req.on('error', reject)
+    req.end()
+  })
 }
 
 /** 创建临时静态目录，并写入默认 SPA 入口文件。 */
@@ -177,6 +229,26 @@ describe('server http app', () => {
     expect(payload.error.message).toContain('Authorization: Bearer [redacted]')
   })
 
+  it('HTTP JSON 错误出口会清洗已成型错误对象', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue({
+      status: 502,
+      code: 'UPSTREAM_ERROR',
+      message: 'Authorization: Bearer sk-secret\n上游失败',
+    })
+    const app = createTestApp()
+
+    const response = await app.fetch(new Request('http://localhost/api/openai-compatible/images/generations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    }))
+    const payload = await response.json()
+
+    expect(response.status).toBe(502)
+    expect(JSON.stringify(payload)).not.toContain('sk-secret')
+    expect(payload.error.message).toContain('Authorization: Bearer [redacted]')
+  })
+
   it('服务静态文件并为 SPA 路由回退到 index.html', async () => {
     const staticDir = await createStaticDir({ 'assets/app.js': 'console.log("ok")' })
     const app = createTestApp(staticDir)
@@ -202,5 +274,170 @@ describe('server http app', () => {
     expect(response.status).toBe(200)
     expect(response.headers.get('Content-Type')).toBe('text/html; charset=utf-8')
     await expect(response.text()).resolves.toBe('<main>SPA fallback</main>')
+  })
+
+  it('Node 桥接在客户端断开时取消 Web Request', async () => {
+    let abortCount = 0
+    let seenRequest: () => void
+    const requestSeen = new Promise<void>((resolve) => {
+      seenRequest = resolve
+    })
+    const server = createNodeServer({
+      fetch: async (request) => {
+        request.signal.addEventListener('abort', () => {
+          abortCount += 1
+        }, { once: true })
+        seenRequest()
+        await delay(80)
+        return new Response('late')
+      },
+    })
+    const { port, close } = await listenTestServer(server)
+
+    try {
+      const req = httpRequest({ hostname: '127.0.0.1', port, path: '/', method: 'POST' })
+      req.on('error', () => undefined)
+      req.end('body')
+      await requestSeen
+      req.destroy()
+      await delay(50)
+
+      expect(abortCount).toBe(1)
+    } finally {
+      await close()
+    }
+  })
+
+  it('Node 桥接在响应关闭且未写完时取消 Web Request', async () => {
+    let abortCount = 0
+    let seenRequest: () => void
+    const requestSeen = new Promise<void>((resolve) => {
+      seenRequest = resolve
+    })
+    const server = createNodeServer({
+      fetch: async (request) => {
+        request.signal.addEventListener('abort', () => {
+          abortCount += 1
+        }, { once: true })
+        seenRequest()
+        await delay(80)
+        return new Response('late')
+      },
+    })
+    const { port, close } = await listenTestServer(server)
+
+    try {
+      const req = httpRequest({ hostname: '127.0.0.1', port, path: '/' })
+      req.on('error', () => undefined)
+      req.end()
+      await requestSeen
+      req.destroy()
+      await delay(50)
+
+      expect(abortCount).toBe(1)
+    } finally {
+      await close()
+    }
+  })
+
+  it('Node 桥接在响应中途关闭时取消 Web Request', async () => {
+    let abortCount = 0
+    let pushNextChunk: () => void
+    const nextChunk = new Promise<void>((resolve) => {
+      pushNextChunk = resolve
+    })
+    const server = createNodeServer({
+      fetch: (request) => {
+        request.signal.addEventListener('abort', () => {
+          abortCount += 1
+        }, { once: true })
+        return Promise.resolve(new Response(new ReadableStream({
+          async start(controller) {
+            controller.enqueue(new TextEncoder().encode('first'))
+            await nextChunk
+            controller.enqueue(new TextEncoder().encode('second'))
+            controller.close()
+          },
+        })))
+      },
+    })
+    const { port, close } = await listenTestServer(server)
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const req = httpRequest({ hostname: '127.0.0.1', port, path: '/' }, (res) => {
+          res.once('data', () => {
+            req.destroy()
+            setTimeout(resolve, 50)
+          })
+        })
+        req.on('error', () => undefined)
+        req.end()
+        setTimeout(() => reject(new Error('未收到首个响应块')), 1000)
+      })
+
+      expect(abortCount).toBe(1)
+    } finally {
+      pushNextChunk()
+      await close()
+    }
+  })
+
+  it('Node 桥接写入失败时取消 Web 响应 body', async () => {
+    let cancelCount = 0
+    let streamController: ReadableStreamDefaultController<Uint8Array>
+    const server = createNodeServer({
+      fetch: () => Promise.resolve(new Response(new ReadableStream({
+        start(controller) {
+          streamController = controller
+          controller.enqueue(new TextEncoder().encode('first'))
+        },
+        cancel() {
+          cancelCount += 1
+        },
+      }))),
+    })
+    const { port, close } = await listenTestServer(server)
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const req = httpRequest({ hostname: '127.0.0.1', port, path: '/' }, (res) => {
+          res.once('data', () => {
+            req.destroy()
+            setTimeout(resolve, 50)
+          })
+        })
+        req.on('error', () => undefined)
+        req.end()
+        setTimeout(() => reject(new Error('未收到首个响应块')), 1000)
+      })
+
+      streamController!.enqueue(new TextEncoder().encode('second'))
+      await delay(50)
+
+      expect(cancelCount).toBe(1)
+    } finally {
+      await close()
+    }
+  })
+
+  it('Node 桥接保留多个 Set-Cookie 响应头', async () => {
+    const headers = new Headers()
+    headers.append('Set-Cookie', 'a=1; Path=/')
+    headers.append('Set-Cookie', 'b=2; Path=/')
+    const server = createNodeServer({
+      fetch: () => new Response('ok', { headers }),
+    })
+    const { port, close } = await listenTestServer(server)
+
+    try {
+      const response = await requestTestServer(port)
+
+      expect(response.statusCode).toBe(200)
+      expect(response.headers['set-cookie']).toEqual(['a=1; Path=/', 'b=2; Path=/'])
+      expect(response.body).toBe('ok')
+    } finally {
+      await close()
+    }
   })
 })
