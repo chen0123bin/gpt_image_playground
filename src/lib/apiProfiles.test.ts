@@ -358,6 +358,38 @@ describe('mergeImportedSettings', () => {
 })
 
 describe('custom providers', () => {
+  it('exposes legacy apiProxy as serverApi mirror on normalized settings', () => {
+    const settings = normalizeSettings({
+      serverApi: false,
+    })
+
+    expect(settings.serverApi).toBe(false)
+    expect(settings.apiProxy).toBe(false)
+    expect(settings.profiles[0].serverApi).toBe(false)
+    expect(settings.profiles[0].apiProxy).toBe(false)
+  })
+
+  it('exposes legacy apiProxy mirror when migrating legacy profile input', () => {
+    const settings = normalizeSettings({
+      profiles: [{
+        id: 'legacy-mirror',
+        name: 'Legacy Mirror',
+        provider: 'openai',
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: 'key',
+        model: 'model',
+        timeout: 600,
+        apiMode: 'images',
+        codexCli: false,
+        apiProxy: false,
+      }],
+      activeProfileId: 'legacy-mirror',
+    })
+
+    expect(settings.profiles[0].serverApi).toBe(false)
+    expect(settings.profiles[0].apiProxy).toBe(false)
+  })
+
   it('migrates legacy apiProxy to serverApi', () => {
     const settings = normalizeSettings({
       profiles: [{

@@ -256,6 +256,7 @@ export function normalizeCustomProviderDefinitions(input: unknown): CustomProvid
 }
 
 export function createDefaultOpenAIProfile(overrides: Partial<ApiProfile> = {}): ApiProfile {
+  const serverApi = readServerApiFlag(overrides, { serverApi: DEFAULT_OPENAI_SERVER_API })
   return {
     id: DEFAULT_OPENAI_PROFILE_ID,
     name: '默认',
@@ -266,12 +267,14 @@ export function createDefaultOpenAIProfile(overrides: Partial<ApiProfile> = {}):
     timeout: DEFAULT_API_TIMEOUT,
     apiMode: 'images',
     codexCli: false,
-    serverApi: DEFAULT_OPENAI_SERVER_API,
     ...overrides,
+    serverApi,
+    apiProxy: serverApi,
   }
 }
 
 export function createDefaultFalProfile(overrides: Partial<ApiProfile> = {}): ApiProfile {
+  const serverApi = readServerApiFlag(overrides, { serverApi: false })
   return {
     id: `fal-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
     name: '新配置',
@@ -282,8 +285,9 @@ export function createDefaultFalProfile(overrides: Partial<ApiProfile> = {}): Ap
     timeout: DEFAULT_API_TIMEOUT,
     apiMode: 'images',
     codexCli: false,
-    serverApi: false,
     ...overrides,
+    serverApi,
+    apiProxy: serverApi,
   }
 }
 
@@ -302,6 +306,7 @@ export function switchApiProfileProvider(profile: ApiProfile, provider: ApiProvi
   const savedDraft = providerDrafts[provider]
 
   if (provider === 'fal') {
+    const serverApi = false
     return {
       ...profile,
       provider,
@@ -309,7 +314,8 @@ export function switchApiProfileProvider(profile: ApiProfile, provider: ApiProvi
       model: savedDraft?.model ?? DEFAULT_FAL_MODEL,
       apiMode: savedDraft?.apiMode ?? 'images',
       codexCli: false,
-      serverApi: false,
+      serverApi,
+      apiProxy: serverApi,
       responseFormatB64Json: savedDraft?.responseFormatB64Json,
       providerDrafts,
     }
@@ -317,6 +323,7 @@ export function switchApiProfileProvider(profile: ApiProfile, provider: ApiProvi
 
   if (customProvider) {
     const shouldUseOpenAIDefaults = profile.provider === 'fal'
+    const serverApi = false
     return {
       ...profile,
       provider: customProvider.id,
@@ -324,12 +331,14 @@ export function switchApiProfileProvider(profile: ApiProfile, provider: ApiProvi
       model: savedDraft?.model ?? (shouldUseOpenAIDefaults ? DEFAULT_IMAGES_MODEL : profile.model || DEFAULT_IMAGES_MODEL),
       apiMode: savedDraft?.apiMode ?? 'images',
       codexCli: false,
-      serverApi: false,
+      serverApi,
+      apiProxy: serverApi,
       responseFormatB64Json: savedDraft?.responseFormatB64Json,
       providerDrafts,
     }
   }
 
+  const serverApi = savedDraft?.serverApi ?? DEFAULT_OPENAI_SERVER_API
   return {
     ...profile,
     provider,
@@ -337,7 +346,8 @@ export function switchApiProfileProvider(profile: ApiProfile, provider: ApiProvi
     model: savedDraft?.model ?? DEFAULT_IMAGES_MODEL,
     apiMode: savedDraft?.apiMode ?? profile.apiMode,
     codexCli: savedDraft?.codexCli ?? profile.codexCli,
-    serverApi: savedDraft?.serverApi ?? DEFAULT_OPENAI_SERVER_API,
+    serverApi,
+    apiProxy: serverApi,
     responseFormatB64Json: savedDraft?.responseFormatB64Json,
     providerDrafts,
   }
@@ -392,6 +402,7 @@ export function normalizeApiProfile(input: unknown, fallback?: Partial<ApiProfil
   })
   const apiMode: ApiMode = record.apiMode === 'responses' ? 'responses' : 'images'
   const rawBaseUrl = typeof record.baseUrl === 'string' ? record.baseUrl : defaults.baseUrl
+  const serverApi = readServerApiFlag(record, defaults)
 
   return {
     ...defaults,
@@ -404,7 +415,8 @@ export function normalizeApiProfile(input: unknown, fallback?: Partial<ApiProfil
     timeout: typeof record.timeout === 'number' && Number.isFinite(record.timeout) ? record.timeout : defaults.timeout,
     apiMode,
     codexCli: Boolean(record.codexCli),
-    serverApi: readServerApiFlag(record, defaults),
+    serverApi,
+    apiProxy: serverApi,
     responseFormatB64Json: record.responseFormatB64Json === true ? true : undefined,
     providerDrafts: normalizeProviderDrafts(record.providerDrafts, customProviderIds),
   }
@@ -427,6 +439,7 @@ export function normalizeSettings(input: Partial<AppSettings> | unknown): AppSet
   const record = input && typeof input === 'object' ? input as Record<string, unknown> : {}
   const customProviders = normalizeCustomProviderDefinitions(record.customProviders)
   const customProviderIds = new Set(customProviders.map((provider) => provider.id))
+  const legacyServerApi = readServerApiFlag(record, { serverApi: DEFAULT_OPENAI_SERVER_API })
   const legacyProfile = createDefaultOpenAIProfile({
     baseUrl: typeof record.baseUrl === 'string' ? record.baseUrl : DEFAULT_BASE_URL,
     apiKey: typeof record.apiKey === 'string' ? record.apiKey : '',
@@ -434,7 +447,7 @@ export function normalizeSettings(input: Partial<AppSettings> | unknown): AppSet
     timeout: typeof record.timeout === 'number' && Number.isFinite(record.timeout) ? record.timeout : DEFAULT_API_TIMEOUT,
     apiMode: record.apiMode === 'responses' ? 'responses' : 'images',
     codexCli: Boolean(record.codexCli),
-    serverApi: readServerApiFlag(record, { serverApi: DEFAULT_OPENAI_SERVER_API }),
+    serverApi: legacyServerApi,
     responseFormatB64Json: record.responseFormatB64Json === true ? true : undefined,
   })
   const profiles = Array.isArray(record.profiles) && record.profiles.length
@@ -444,6 +457,7 @@ export function normalizeSettings(input: Partial<AppSettings> | unknown): AppSet
     ? record.activeProfileId
     : profiles[0].id
   const active = profiles.find((p) => p.id === activeProfileId) ?? profiles[0]
+  const activeServerApi = active.serverApi
 
   return {
     baseUrl: active.baseUrl,
@@ -452,7 +466,8 @@ export function normalizeSettings(input: Partial<AppSettings> | unknown): AppSet
     timeout: active.timeout,
     apiMode: active.apiMode,
     codexCli: active.codexCli,
-    serverApi: active.serverApi,
+    serverApi: activeServerApi,
+    apiProxy: activeServerApi,
     customProviders,
     providerOrder: Array.isArray(record.providerOrder) ? record.providerOrder.map(String) : undefined,
     clearInputAfterSubmit: typeof record.clearInputAfterSubmit === 'boolean' ? record.clearInputAfterSubmit : false,
@@ -544,6 +559,7 @@ export function getActiveApiProfile(settings: Partial<AppSettings> | unknown): A
   const record = settings && typeof settings === 'object' ? settings as Record<string, unknown> : {}
   const normalized = normalizeSettings(settings)
   const profile = normalized.profiles.find((p) => p.id === normalized.activeProfileId) ?? normalized.profiles[0] ?? createDefaultOpenAIProfile()
+  const serverApi = readServerApiFlag(record, profile)
 
   return {
     ...profile,
@@ -553,7 +569,8 @@ export function getActiveApiProfile(settings: Partial<AppSettings> | unknown): A
     timeout: typeof record.timeout === 'number' && Number.isFinite(record.timeout) ? record.timeout : profile.timeout,
     apiMode: record.apiMode === 'images' || record.apiMode === 'responses' ? record.apiMode : profile.apiMode,
     codexCli: typeof record.codexCli === 'boolean' ? record.codexCli : profile.codexCli,
-    serverApi: readServerApiFlag(record, profile),
+    serverApi,
+    apiProxy: serverApi,
   }
 }
 
