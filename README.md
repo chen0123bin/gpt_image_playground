@@ -89,7 +89,7 @@
 ### 🔌 多配置与服务商增强
 - **多配置管理**：支持创建并保存多个 API 配置（包含服务商、API Key、模型等），按需快速切换；支持一键复制当前配置到列表底部，并通过拖拽对配置列表与服务商列表进行自定义排序。
 - **多服务商接入**：内置 OpenAI 兼容接口（含 `Images API` 和 `Responses API`）、fal.ai（支持队列），并支持通过 JSON 导入自定义 HTTP 服务商配置（兼容同步/异步任务）。
-- **API 代理**：OpenAI 兼容接口与 fal.ai 均可配置自定义代理。其中 OpenAI 兼容接口可开启同源 `/api-proxy/` 代理，交由 Docker 或本地开发环境转发至真实 API，绕开浏览器 CORS 限制。
+- **服务端 API 模式**：OpenAI 兼容接口可通过同源 Node.js 后端请求真实 API，避免浏览器 CORS 限制，并由后端下载结果图片 URL。fal.ai 和自定义服务商在当前版本仍沿用原有前端请求路径。
 - **Codex CLI 兼容模式**：对上游为 Codex CLI 的 API，开启后应用 Codex CLI 实际支持的参数，并将多图生成拆分为并发单图。
 - **提示词防改写**：Responses API 会始终在请求文本前加入强制指令防止提示词被改写；开启 Codex CLI 模式后，Images API 也会获得同等保护。
 - **智能诊断提示**：当检测到接口异常改写行为或缺少常规参数时，自动提示开启相应的兼容模式。
@@ -163,24 +163,14 @@ $env:VITE_DEFAULT_API_URL="https://api.openai.com/v1"; npm run deploy:cf
 
 **环境变量说明：**
 
-- `DEFAULT_API_URL`：设置页面上默认显示的 API 地址。
-- `API_PROXY_URL`：配置内置代理实际转发到的目标 API 地址（仅开启代理时有效）。
-- `ENABLE_API_PROXY`：设为 `true` 开启容器内置 Nginx 同源代理，用于解决浏览器跨域（CORS）限制。开启后，前端 **API 代理** 开关默认开启，浏览器会请求同源的 `/api-proxy/`，再由 Nginx 转发至 `API_PROXY_URL`；用户仍可在设置中手动关闭。
-- `LOCK_API_PROXY`：设为 `true` 时，在 `ENABLE_API_PROXY=true` 的前提下将前端 **API 代理** 开关强制锁定为开启，用户无法关闭。
-- `HOST` / `PORT`：指定容器内 Nginx 监听的地址和端口（默认 `0.0.0.0:80`）。
-
-> ⚠️ **安全警告**：开启 API 代理后，任何人都能将你的服务器作为代理来请求目标 API。建议仅在有访问控制（如 IP 白名单）或本地网络中开启。
-
-> 💡 **兼容迁移**：旧版本中的 `API_URL` 已拆分为 `DEFAULT_API_URL` 和 `API_PROXY_URL`。容器启动时会自动将遗留的 `API_URL` 作为两个新变量的兜底值，实现无缝兼容。建议更新配置文件，逐步迁移至新变量。
+- `DEFAULT_API_URL`：设置页面上默认显示的 OpenAI 兼容接口地址。
+- `HOST` / `PORT`：指定容器内 Node 服务监听地址和端口，默认 `0.0.0.0:80`。
 
 **1. Docker CLI 示例**
 
 ```bash
 docker run -d -p 8080:80 \
   -e DEFAULT_API_URL=https://api.openai.com/v1 \
-  -e ENABLE_API_PROXY=true \
-  -e LOCK_API_PROXY=true \
-  -e API_PROXY_URL=https://api.openai.com/v1 \
   ghcr.io/cooksleep/gpt_image_playground:latest
 ```
 
@@ -217,17 +207,9 @@ npm install
 npm run dev
 ```
 
-**2. 本地开发跨域代理 (可选)**
+`npm run dev` 会同时启动 Vite 前端和 Node 后端。开发环境中浏览器请求 `/api/openai-compatible/*`，由 Vite 转发到本机 Node 后端，再由 Node 后端请求真实 OpenAI 兼容接口。
 
-如果在本地开发时遇到浏览器的 CORS 限制，可开启本地代理转发：
-
-```bash
-cp dev-proxy.config.example.json dev-proxy.config.json
-```
-
-修改 `dev-proxy.config.json`，将 `target` 设置为真实的图片接口地址。重启开发服务器后，在页面设置中开启 **API 代理** 即可（请求将被转发如 `http://localhost:5173/api-proxy/... -> target/...`）。此功能仅在 `npm run dev` 阶段生效，不会影响打包产物。
-
-**3. 本地故障模拟 API (可选)**
+**2. 本地故障模拟 API (可选)**
 
 如果需要复现图片 URL 跨域、接口返回结构异常、原始响应查看等问题，可启动内置模拟服务：
 

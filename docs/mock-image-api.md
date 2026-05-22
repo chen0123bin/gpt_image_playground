@@ -28,6 +28,8 @@ $env:MOCK_IMAGE_API_PORT="8788"; npm run mock:api
 
 模拟服务会读取请求体里的 `n`，最多返回 10 条结果。把应用里的图片数量调到 2 或更多后，`url-cors-block` 这类模式会一次返回多个图片 URL，可用于测试“原始图片链接”弹窗。
 
+使用服务端 API 模式后，API 请求阶段的 CORS 会由本项目后端绕过；图片 URL 下载也会由后端完成。`api-no-cors` 和 `url-cors-block` 可用于验证旧前端直连问题已不再出现。
+
 可用模式：
 
 - `http://127.0.0.1:8787/url-cors-block`：API 请求成功，但返回的图片 URL 没有 CORS 头，浏览器下载图片时失败。
